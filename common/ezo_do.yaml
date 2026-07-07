@@ -103,8 +103,10 @@ sensor:
       sorting_weight: 10
     on_custom:
       then:
-        - lambda:
-            id(raw_value_do).publish_state(x);
+        - lambda: |-
+            // Ignore empty payloads (e.g. *OK from set-type commands like T,n / S,n)
+            // so derived sensors aren't blanked by a parse failure.
+            if (!x.empty()) id(raw_value_do).publish_state(x);
     on_calibration:
       then:
         - lambda:
@@ -203,6 +205,28 @@ button:
         - lambda: |-
             esphome::i2c::ErrorCode err = id(bus_a)->write(${addDO}, nullptr, 0);
             if (err == esphome::i2c::ERROR_OK) {
+              // Live compensation before each read (DO EZO datasheet):
+              //  - T,<degC>: temp comp (default 20C, not retained on power cycle).
+              //    Plain T,n + R is used instead of RT,n (RT needs firmware >= 2.13).
+              //  - S,<ppt>,ppt: salinity comp from the EC circuit's live salinity
+              //    (~20% mg/L error at reef salinity if left at default 0).
+              // temp_1 is in F; sensor_salinity comes from common/ezo_ec.yaml.
+              float tF = id(temp_1).state;
+              if (!isnan(tF) && tF > 32.0f && tF < 110.0f) {
+                float tC = (tF - 32.0f) * 5.0f / 9.0f;
+                char cmd[16];
+                snprintf(cmd, sizeof(cmd), "T,%.2f", tC);
+                id(do_ezo).send_custom(cmd);
+              }
+              else {
+                ESP_LOGW("ezo_do", "Tank temperature unavailable; DO temp compensation not updated (last-set/default 20C used).");
+              }
+              float S = id(sensor_salinity).state;
+              if (!isnan(S) && S >= 0.0f && S <= 45.0f) {
+                char cmd[20];
+                snprintf(cmd, sizeof(cmd), "S,%.1f,ppt", S);
+                id(do_ezo).send_custom(cmd);
+              }
               id(do_ezo).send_custom("R");
             }
             else {

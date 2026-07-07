@@ -99,6 +99,28 @@ esphome:
               ESP_LOGW("ezo_ph", "pH sensor may not have its required MID calibration yet. Run calibration via 'pH - Command Select'.");
             }
 
+interval:
+  # Live temperature compensation: push tank temp (T,<degC>) to the pH circuit
+  # each cycle. The comp temp persists while powered (resets to 25C on power
+  # cycle), so the ezo component's periodic "R" reads are compensated.
+  # temp_1 is in F. Skipped (with fallback to last-set/default) if the probe
+  # or a valid temperature isn't available.
+  - interval: "${update_ph}"
+    then:
+      - lambda: |-
+          esphome::i2c::ErrorCode err = id(bus_a)->write(${addPH}, nullptr, 0);
+          if (err != esphome::i2c::ERROR_OK) return;
+          float tF = id(temp_1).state;
+          if (!isnan(tF) && tF > 32.0f && tF < 110.0f) {
+            float tC = (tF - 32.0f) * 5.0f / 9.0f;
+            char cmd[16];
+            snprintf(cmd, sizeof(cmd), "T,%.2f", tC);
+            id(ph_ezo).send_custom(cmd);
+          }
+          else {
+            ESP_LOGW("ezo_ph", "Tank temperature unavailable; pH temp compensation not updated (last-set/default 25C used).");
+          }
+
 sensor:
   # EZO Circuits (SCL/RX, SDA/TX)
   # EZO Circuit - pH
@@ -114,8 +136,9 @@ sensor:
     device_class: PH
     on_custom:
       then:
-        - lambda:
-            id(result_ph).publish_state(x);
+        - lambda: |-
+            // Ignore empty payloads (e.g. *OK from set-type commands like T,n)
+            if (!x.empty()) id(result_ph).publish_state(x);
     on_calibration:
       then:
         - lambda:
@@ -225,6 +248,10 @@ button:
               id(ph_ezo).get_slope();
               ESP_LOGD("ezo_ph", "pH slope check sent. Check 'pH - Command Result' for response.");
             }
+            else if (id(select_command_ph).current_option() == "Get Temperature Compensation") {
+              id(ph_ezo).get_t();
+              ESP_LOGD("ezo_ph", "pH temp compensation query sent. Check 'pH - Command Result' for response.");
+            }
             else if (id(select_command_ph).current_option() == "Check Calibration") {
               id(ph_ezo).get_calibration();
               ESP_LOGD("ezo_ph", "pH calibration check sent. Check 'pH - Command Result' for response.");
@@ -296,6 +323,7 @@ select:
       - "Information"
       - "Status"
       - "Get Slope"
+      - "Get Temperature Compensation"
       - "Check Calibration"
       - "Calibrate @ MID = 7 (WILL RESET CALIBRATION)"
       - "Calibrate @ LOW = 4 (WILL RESET CALIBRATION)"
