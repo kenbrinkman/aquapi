@@ -46,6 +46,15 @@ reboots), `RODI This Run` (gal, resets when a run starts), `RODI Producing`
 (F(Hz) = 38 × Q(L/min)); bucket-test and tune `flow_k_factor` for accurate
 volume — the runtime watchdog doesn't depend on calibration.
 
+**Status (2026-07-12):** firmware with this package flashed; meter not yet
+physically installed (GPIO27 pull-up reads 0 gal/h until wired). HA created
+the entities as `*.reef_tank_sump_aquapi_rodi_*` (IDs derive from the current
+device friendly name, not the historical `aquapi_60fe10` prefix) — they were
+renamed in the entity registry to `*.aquapi_60fe10_rodi_*` to match the Reef
+Command dashboard, the runaway automation, and the Reef RODI Made Today
+utility meter. Expect the same prefix mismatch for any future entities added
+to this device.
+
 ## Optical level sensors (`common/water_level.yaml`)
 
 Inverted logic (`optical_inverted: true`): HA/ESPHome **on = wet**.
