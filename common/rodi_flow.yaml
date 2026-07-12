@@ -1,0 +1,99 @@
+---
+# =============================================================================
+# RODI FEED-LINE FLOW METER  (GREDIA GR-402B, Hall-effect turbine, G1/4")
+# =============================================================================
+# Mounted on the RODI *feed* line (product + waste, ~2 L/min) so flow is well
+# above the meter's 0.3 L/min floor. Primary purpose: runtime watchdog — a HA
+# automation alerts if "RODI Producing" stays on for >5h (stuck float / runaway).
+#
+# Wiring (15 cm pigtail):
+#   Red    -> 3V3   (power at 3.3 V, NOT 5 V — output is open-collector, this
+#                    keeps the pulse train GPIO-safe)
+#   Black  -> GND
+#   Yellow -> GPIO27 (freed leak-sensor pin; internal pull-up enabled below)
+#
+# Calibration: spec is F(Hz) = 38 * Q(L/min), ±3%, but K-factor drifts unit to
+# unit. Do a bucket test and tune ${flow_k_factor} if you want accurate volume.
+# (Runtime alerting does not depend on calibration accuracy.)
+# =============================================================================
+substitutions:
+  flowPin: "27"                 # GPIO27 — RODI feed line
+  flow_k_factor: "38.0"         # F(Hz) = k * Q(L/min); calibrate via bucket test
+  flow_update: "10s"
+  sorting_group_rodi_weight: '12'
+
+web_server:
+  sorting_groups:
+    - id: sorting_group_rodi
+      name: "RODI"
+      sorting_weight: ${sorting_group_rodi_weight}
+
+sensor:
+  # Instantaneous flow rate in gal/h (dashboard standard unit).
+  # pulse_counter reports pulses/min by default;
+  # Q(L/min) = pulses_min / (60 * k);  gal/h = L/min * 15.8503.
+  - platform: pulse_counter
+    pin:
+      number: ${flowPin}
+      mode:
+        input: true
+        pullup: true
+    id: rodi_pulse
+    name: "RODI Flow Rate"
+    unit_of_measurement: "gal/h"
+    state_class: measurement
+    accuracy_decimals: 1
+    icon: mdi:water-pump
+    update_interval: ${flow_update}
+    filters:
+      - lambda: return x / (60.0 * ${flow_k_factor}) * 15.8503;
+    web_server:
+      sorting_group_id: sorting_group_rodi
+
+  # Running total volume through the feed line (gallons). Survives reboots.
+  # (flow is gal/h, so integrate over hours to get gallons)
+  - platform: integration
+    name: "RODI Total Volume"
+    id: rodi_total
+    sensor: rodi_pulse
+    time_unit: h
+    unit_of_measurement: "gal"
+    device_class: water
+    state_class: total_increasing
+    accuracy_decimals: 2
+    icon: mdi:cup-water
+    restore: true
+    web_server:
+      sorting_group_id: sorting_group_rodi
+
+  # Volume of the current production run (gallons) — resets each time
+  # "RODI Producing" switches on (see on_press below).
+  - platform: integration
+    name: "RODI This Run"
+    id: rodi_this_run
+    sensor: rodi_pulse
+    time_unit: h
+    unit_of_measurement: "gal"
+    accuracy_decimals: 2
+    icon: mdi:water-plus
+    web_server:
+      sorting_group_id: sorting_group_rodi
+
+binary_sensor:
+  # "Producing" = measurable flow, debounced 30 s to ignore transient blips.
+  # Thresholds are in gal/h (flow sensor's unit): 1.6 gal/h ≈ 0.10 L/min.
+  - platform: analog_threshold
+    name: "RODI Producing"
+    id: rodi_producing
+    sensor_id: rodi_pulse
+    threshold:
+      upper: 1.6    # gal/h — turns ON above this (≈0.10 L/min)
+      lower: 0.8    # gal/h — turns OFF below this (≈0.05 L/min, hysteresis)
+    icon: mdi:water-check
+    filters:
+      - delayed_on_off: 30s
+    on_press:
+      then:
+        - sensor.integration.reset: rodi_this_run
+    web_server:
+      sorting_group_id: sorting_group_rodi

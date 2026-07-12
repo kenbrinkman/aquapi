@@ -280,11 +280,14 @@ number:
     id: ec_ideal_low
     name: "EC Ideal Low"
     icon: mdi:flash-outline
+    # NOTE: ec_ezo publishes mS/cm (raw µS / 1000 filter), and the in-range /
+    # score lambdas compare against ec_ezo.state directly — so this band must
+    # be in mS/cm too. Upstream labeled it µS (unit mismatch). Seawater ≈ 53.
     min_value: 0
-    max_value: 5000
-    step: 10
-    initial_value: 800
-    unit_of_measurement: "µS"
+    max_value: 100
+    step: 0.1
+    initial_value: 45
+    unit_of_measurement: "mS/cm"
     optimistic: true
     restore_value: true
     entity_category: "Config"
@@ -301,10 +304,10 @@ number:
     name: "EC Ideal High"
     icon: mdi:flash-outline
     min_value: 0
-    max_value: 5000
-    step: 10
-    initial_value: 1500
-    unit_of_measurement: "µS"
+    max_value: 100
+    step: 0.1
+    initial_value: 55
+    unit_of_measurement: "mS/cm"
     optimistic: true
     restore_value: true
     entity_category: "Config"

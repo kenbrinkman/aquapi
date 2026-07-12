@@ -1,0 +1,39 @@
+---
+# binary_ethernet.yaml
+# Variant of binary.yaml for builds WITHOUT a leak sensor.
+# Identical to binary.yaml but the GPIO27 "Leak Sensor" entity is removed,
+# so it doesn't appear in Home Assistant. (GPIO27 is left free.)
+substitutions:
+  binary_pin_1: "13"  # yellow
+
+binary_sensor:
+  - platform: gpio
+    id: binary_pin_1
+    disabled_by_default: true
+    pin:
+      number: ${binary_pin_1}
+      inverted: true
+      mode:
+        input: true
+        pullup: true
+    name: "Binary Sensor 1"
+    filters:
+      - delayed_on_off: 30ms
+    on_state:
+      then:
+        - if:
+            condition:
+              binary_sensor.is_on: binary_pin_1
+            then:
+              - logger.log:
+                  level: WARN
+                  tag: "binary_sensor_1"
+                  format: "Binary Sensor 1 activated."
+            else:
+              - logger.log:
+                  level: INFO
+                  tag: "binary_sensor_1"
+                  format: "Binary Sensor 1 cleared."
+    web_server:
+      sorting_group_id: sorting_group_misc
+    icon: mdi:check-circle

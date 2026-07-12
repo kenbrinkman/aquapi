@@ -1,0 +1,46 @@
+---
+# =============================================================================
+# AquaPi Wired Ethernet (WIZnet W5500 / WIZ850io over SPI)
+# =============================================================================
+# Adds a wired Ethernet connection to the AquaPi using a WIZ850io (W5500) module
+# on the ESP32's VSPI bus, which the AquaPi board breaks out across the AUX
+# terminal blocks. Requires the esp-idf framework (already set in espboard.yaml).
+#
+# IMPORTANT: Ethernet and WiFi are mutually exclusive on the ESP32. Use this
+# package together with device_base_ethernet.yaml (NOT the stock device_base.yaml).
+#
+# Power the WIZ850io from the AquaPi 3V3 rail (the module is 3.3 V only).
+# See AquaPi-Ethernet-Wiring.md for the full wiring + power reference.
+# =============================================================================
+
+substitutions:
+  # SPI pins (VSPI default) — broken out on AquaPi AUX terminals
+  eth_clk_pin: "GPIO18"    # AUX1  -> WIZ850io SCLK (J1-4)
+  eth_mosi_pin: "GPIO23"   # AUX3  -> WIZ850io MOSI (J1-3)
+  eth_miso_pin: "GPIO19"   # AUX1  -> WIZ850io MISO (J2-6)
+  eth_cs_pin: "GPIO25"     # DAC1  -> WIZ850io SCSn (J1-5)  [clean GPIO, not a strapping pin]
+  eth_int_pin: "GPIO17"    # AUX6  -> WIZ850io INTn (J1-6)
+  eth_reset_pin: "GPIO4"   # AUX6  -> WIZ850io RSTn (J2-5)  [ESPHome drives the 500us reset pulse]
+
+ethernet:
+  type: W5500
+  clk_pin: ${eth_clk_pin}
+  mosi_pin: ${eth_mosi_pin}
+  miso_pin: ${eth_miso_pin}
+  cs_pin: ${eth_cs_pin}
+  interrupt_pin: ${eth_int_pin}
+  reset_pin: ${eth_reset_pin}
+  # Root cause of the early 0x00 version-mismatch was a MOSI miswire (D3 instead
+  # of D23), NOT signal integrity — so the bus runs fine at the default speed.
+  # Default is 26.67MHz (used when clock_speed is omitted). To push higher, set
+  # e.g. clock_speed: 40MHz or 80MHz (W5500 max) — only worth it on a short/
+  # soldered harness; this controller doesn't need the extra throughput.
+  clock_speed: 26.67MHz
+
+  # ---- Optional static IP (recommended for a 24/7 HA device) ----
+  # Uncomment and edit to pin the AquaPi to a fixed address instead of DHCP:
+  # manual_ip:
+  #   static_ip: 192.168.1.50
+  #   gateway: 192.168.1.1
+  #   subnet: 255.255.255.0
+  #   dns1: 192.168.1.1

@@ -1,0 +1,53 @@
+---
+# =============================================================================
+# AquaPi — Standard build, WIRED ETHERNET variant (WIZnet W5500 / WIZ850io)
+# =============================================================================
+# Same as aquapi_config.yaml, but uses a wired Ethernet connection instead of
+# WiFi. It swaps in the WiFi-free device base and adds the ethernet package.
+#
+# Build/flash with the local repo:
+#   esphome run aquapi_config_ethernet.yaml
+#
+# Wiring + power: see AquaPi-Ethernet-Wiring.md
+# =============================================================================
+substitutions:
+  name: "aquapi-standard"
+  project_name: "therealfalsereality.aquapi-standard"
+  do_temp_comp_source: "temp_1"
+  do_salinity_comp_source: "sensor_salinity"
+
+  # Hardware Variant
+  hardware_variant: "Standard - Inverted Optical (Ethernet)"
+  import: "false"
+
+  # --- EC scoring rescaled for seawater, in mS/cm (overrides water_quality.yaml
+  # freshwater defaults). Reef ≈ 53 mS/cm @ 35 ppt; 1 ppt ≈ 1.5 mS/cm.
+  wq_ec_score_deviation_multiplier: "10.0"  # ≈ −15 pts per ppt off mid-band
+  wq_ec_good_offset: "2"    # Caution when > 2 mS/cm (~1.3 ppt) outside band
+  wq_ec_alert_offset: "5"   # Alert when > 5 mS/cm (~3.3 ppt) outside band
+
+packages:
+  device_base: !include common/device_base_ethernet.yaml   # WiFi-free base
+  ethernet: !include common/ethernet.yaml                  # W5500 wired networking
+  esp32: !include common/espboard.yaml
+  # ota_https intentionally OMITTED for the customized Ethernet build.
+  # The cloud HTTP-OTA flashes the STOCK Wi-Fi firmware and factory-resets the
+  # device, which would wipe this Ethernet config and drop it off the network.
+  # ESPHome OTA (from common/device_base_ethernet.yaml) handles all updates:
+  #   git pull && esphome run aquapi_config_ethernet.yaml
+  # ota_https: !include common/ota_https.yaml
+  dallas: !include common/temperature_dallas_index.yaml
+  water_level: !include common/water_level.yaml
+  binary: !include common/binary_ethernet.yaml   # no leak sensor (GPIO27 free)
+  rodi_flow: !include common/rodi_flow.yaml       # RODI feed-line flow meter on GPIO27
+  ezo_ph: !include common/ezo_ph.yaml
+  ezo_ec: !include common/ezo_ec.yaml
+  ezo_orp: !include common/ezo_orp.yaml
+  water_quality: !include common/water_quality.yaml
+  # ezo_co2 disabled: no CO2 probe installed (was: No Carbon Dioxide sensor at 105)
+  # ezo_co2: !include common/ezo_co2.yaml
+  ezo_do: !include common/ezo_do.yaml   # kept: DO probe to be installed later
+  # ezo_pmp / ezo_pmp_duo disabled: no dosing pumps installed (was: ezo-pmp:110 read error)
+  # ezo_pmp: !include common/ezo_pmp.yaml
+  # ezo_pmp_duo: !include common/ezo_pmp_duo.yaml
+  aquapi: !include common/aquapi.yaml

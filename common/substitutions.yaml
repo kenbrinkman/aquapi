@@ -38,9 +38,10 @@ substitutions:
   dht_type: "DHT11"
   irReceiverPin: "35"
   leak_sensor: "27"  # blue -> red (GND - Green -> Black  )
-  opticalHighPin: "33"  # blue
-  # pins
-  opticalLowPin: "32"  # yellow
+  # pins — canonical mapping matches common/water_level.yaml (the flashed values):
+  # LOW = GPIO33 (yellow), HIGH = GPIO32 (blue). Keep both files in sync.
+  opticalHighPin: "32"  # blue
+  opticalLowPin: "33"  # yellow
   temp_address_2: "''"
 
   # I2C Pins
