@@ -39,9 +39,10 @@ substitutions:
   irReceiverPin: "35"
   leak_sensor: "27"  # blue -> red (GND - Green -> Black  )
   # pins — canonical mapping matches common/water_level.yaml (the flashed values):
-  # LOW = GPIO33 (yellow), HIGH = GPIO32 (blue). Keep both files in sync.
-  opticalHighPin: "32"  # blue
-  opticalLowPin: "33"  # yellow
+  # LOW = GPIO33 (blue leg), HIGH = GPIO32 (yellow leg). Keep both files in sync.
+  # As wired on this board (fixed): yellow=HIGH/32, blue=LOW/33 — opposite the old harness folklore.
+  opticalHighPin: "32"  # yellow harness leg (pigtail: yellow)
+  opticalLowPin: "33"  # blue harness leg (pigtail: white)
   temp_address_2: "''"
 
   # I2C Pins

@@ -1,8 +1,8 @@
 ---
 substitutions:
   # Optical_1
-  opticalLowPin: "33"  # yellow
-  opticalHighPin: "32"  # blue
+  opticalLowPin: "33"  # blue harness leg (pigtail: white)
+  opticalHighPin: "32"  # yellow harness leg (pigtail: yellow)
   optical_inverted: "true"
 
   # Water Level
