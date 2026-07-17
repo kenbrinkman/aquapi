@@ -7,9 +7,12 @@
 # automation alerts if "RODI Producing" stays on for >5h (stuck float / runaway).
 #
 # Wiring (15 cm pigtail):
-#   Red    -> 3V3   (power at 3.3 V, NOT 5 V — output is open-collector, this
-#                    keeps the pulse train GPIO-safe)
-#   Black  -> GND
+#   Red    -> 5V    (any aux-block 5V terminal = USB VIN; keeps load off the
+#                    3V3 rail, which is already feeding I2C + the W5500.
+#                    Signal-safe because the output is OPEN-COLLECTOR — it only
+#                    pulls low, never drives 5 V; line idles at 3.3 V via the
+#                    internal pull-up below. Decided 2026-07-12.)
+#   Black  -> GND   (same aux block)
 #   Yellow -> GPIO27 (freed leak-sensor pin; internal pull-up enabled below)
 #
 # Calibration: spec is F(Hz) = 38 * Q(L/min), ±3%, but K-factor drifts unit to

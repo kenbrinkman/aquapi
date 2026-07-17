@@ -36,9 +36,9 @@ Hall-effect turbine, G1/4", mounted on the RODI **feed** line.
 
 | Wire | Connect to | Note |
 |------|-----------|------|
-| Red | 3V3 | **NOT 5 V** — output is open-collector; 3.3 V keeps pulses GPIO-safe |
-| Black | GND | |
-| Yellow | GPIO27 | internal pull-up enabled in config |
+| Red | **5 V** (any aux-block 5V terminal) | Changed from 3V3 2026-07-12 — 5V is USB VIN, keeps load off the shared 3V3 rail (I2C + W5500). Signal-safe: output is open-collector (pull-low only), line idles at 3.3 V via the ESP32 pull-up |
+| Black | GND (same aux block) | |
+| Yellow | GPIO27 (D27 terminal, AUX2) | internal pull-up enabled in config |
 
 Entities: `RODI Flow Rate` (gal/h), `RODI Total Volume` (gal, survives
 reboots), `RODI This Run` (gal, resets when a run starts), `RODI Producing`
