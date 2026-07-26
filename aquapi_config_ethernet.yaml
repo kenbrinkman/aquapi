@@ -47,6 +47,12 @@ packages:
   # ezo_co2 disabled: no CO2 probe installed (was: No Carbon Dioxide sensor at 105)
   # ezo_co2: !include common/ezo_co2.yaml
   ezo_do: !include common/ezo_do.yaml   # kept: DO probe to be installed later
+  # EZO protocol lock buttons (pH/EC/ORP/DO only). NOT common/ezo_commands.yaml —
+  # that file references co2/hum/o2/rtd + 5 pump IDs this build doesn't define.
+  ezo_lock: !include common/ezo_lock.yaml
+  # Per-circuit I2C presence sensors. NOT common/i2c_detection.yaml — that one
+  # warns every 60s about the pump circuits that aren't installed here.
+  i2c_detection: !include common/i2c_detection_reef.yaml
   # ezo_pmp / ezo_pmp_duo disabled: no dosing pumps installed (was: ezo-pmp:110 read error)
   # ezo_pmp: !include common/ezo_pmp.yaml
   # ezo_pmp_duo: !include common/ezo_pmp_duo.yaml

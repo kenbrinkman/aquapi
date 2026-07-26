@@ -1,3 +1,0 @@
-substitutions:
-  # App Version
-  app_version: "26.6.7"  # bump so the next flash is distinguishable (2026-07-12 RODI build shipped as 26.6.6)

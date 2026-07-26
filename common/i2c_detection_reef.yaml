@@ -1,0 +1,137 @@
+---
+# =============================================================================
+# I2C bus presence detection — LOCAL FILE, reef build
+# =============================================================================
+# Why this file exists instead of common/i2c_detection.yaml:
+#   The upstream package probes and reports on every EZO circuit type including
+#   CO2, RTD, humidity and five peristaltic pumps. None of those are installed
+#   here, and its log_if_missing watchdog emits a WARN for the three pump
+#   circuits every 60 s. This trimmed copy covers only the four circuits that
+#   are actually on the bus. Kept local so upstream pulls never conflict.
+#
+# What this gives you:
+#   - "EZO <circuit> Detected" binary sensor per circuit, refreshed every 60 s
+#   - "I2C Devices Connected" count and "I2C Addresses Detected" list
+#   So a circuit dropping off the bus is visible in HA instead of requiring you
+#   to go look at the LED on the board. Pair with an HA alert on any of the four
+#   going 'off'. See also: common/ezo_lock.yaml
+# =============================================================================
+
+substitutions:
+  sorting_group_i2c_detection: '95'
+
+  # Addresses — must match the four installed ezo_*.yaml packages
+  addPH: "99"    # 0x63
+  addEC: "100"   # 0x64
+  addORP: "98"   # 0x62
+  addDO: "97"    # 0x61
+
+web_server:
+  sorting_groups:
+    - id: sorting_group_i2c_detection
+      name: "I2C Sensor Detection"
+      sorting_weight: ${sorting_group_i2c_detection}
+
+script:
+  - id: update_sensor_detection
+    then:
+      - lambda: |-
+          // Probing with a zero-byte write is the standard presence check.
+          auto check_i2c_device = [](uint8_t address) -> bool {
+            esphome::i2c::ErrorCode err = id(bus_a)->write(address, nullptr, 0);
+            return (err == esphome::i2c::ERROR_OK);
+          };
+
+          id(ezo_ph_detected).publish_state(check_i2c_device(${addPH}));
+          id(ezo_ec_detected).publish_state(check_i2c_device(${addEC}));
+          id(ezo_orp_detected).publish_state(check_i2c_device(${addORP}));
+          id(ezo_do_detected).publish_state(check_i2c_device(${addDO}));
+
+          // A circuit that has flipped to UART mode disappears from the bus,
+          // so this doubles as a Plock/protocol-latch canary.
+          if (!id(ezo_ph_detected).state)  ESP_LOGW("ezo_detection", "pH (0x63) not responding on I2C.");
+          if (!id(ezo_ec_detected).state)  ESP_LOGW("ezo_detection", "EC (0x64) not responding on I2C — check for green LED (UART mode).");
+          if (!id(ezo_orp_detected).state) ESP_LOGW("ezo_detection", "ORP (0x62) not responding on I2C.");
+          if (!id(ezo_do_detected).state)  ESP_LOGW("ezo_detection", "DO (0x61) not responding on I2C.");
+
+interval:
+  - interval: 60s
+    then:
+      - script.execute: update_sensor_detection
+
+binary_sensor:
+  - platform: template
+    name: "EZO pH Detected"
+    id: ezo_ph_detected
+    icon: mdi:ph
+    entity_category: "diagnostic"
+    web_server:
+      sorting_group_id: sorting_group_i2c_detection
+
+  - platform: template
+    name: "EZO EC Detected"
+    id: ezo_ec_detected
+    icon: mdi:shaker-outline
+    entity_category: "diagnostic"
+    web_server:
+      sorting_group_id: sorting_group_i2c_detection
+
+  - platform: template
+    name: "EZO ORP Detected"
+    id: ezo_orp_detected
+    icon: mdi:lightning-bolt
+    entity_category: "diagnostic"
+    web_server:
+      sorting_group_id: sorting_group_i2c_detection
+
+  - platform: template
+    name: "EZO DO Detected"
+    id: ezo_do_detected
+    icon: mdi:air-filter
+    entity_category: "diagnostic"
+    web_server:
+      sorting_group_id: sorting_group_i2c_detection
+
+sensor:
+  - platform: template
+    name: "I2C Devices Connected"
+    id: i2c_devices_connected
+    icon: mdi:chip
+    entity_category: "diagnostic"
+    accuracy_decimals: 0
+    unit_of_measurement: "devices"
+    update_interval: 60s
+    lambda: |-
+      int device_count = 0;
+      for (uint8_t address = 8; address < 120; address++) {
+        esphome::i2c::ErrorCode err = id(bus_a)->write(address, nullptr, 0);
+        if (err == esphome::i2c::ERROR_OK) device_count++;
+      }
+      return device_count;
+    web_server:
+      sorting_group_id: sorting_group_i2c_detection
+
+text_sensor:
+  - platform: template
+    name: "I2C Addresses Detected"
+    id: i2c_addresses_list
+    icon: mdi:format-list-numbered
+    entity_category: "diagnostic"
+    update_interval: 60s
+    lambda: |-
+      std::string addresses = "";
+      int count = 0;
+      for (uint8_t address = 8; address < 120; address++) {
+        esphome::i2c::ErrorCode err = id(bus_a)->write(address, nullptr, 0);
+        if (err == esphome::i2c::ERROR_OK) {
+          if (count > 0) addresses += ", ";
+          char addr_str[16];
+          snprintf(addr_str, sizeof(addr_str), "%d (0x%02X)", address, address);
+          addresses += addr_str;
+          count++;
+        }
+      }
+      if (addresses.empty()) addresses = "None";
+      return addresses;
+    web_server:
+      sorting_group_id: sorting_group_i2c_detection

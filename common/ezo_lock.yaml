@@ -1,0 +1,106 @@
+---
+# =============================================================================
+# EZO Protocol Lock (Plock) — LOCAL FILE, reef build
+# =============================================================================
+# Why this file exists instead of common/ezo_commands.yaml:
+#   Upstream ezo_commands.yaml also defines Lock buttons, but it references
+#   co2_ezo / hum_ezo / o2_ezo / rtd_ezo and five ezo_pump_* IDs. None of those
+#   circuits are installed on this build, so including it fails to compile.
+#   This file covers only the four circuits actually present: pH, EC, ORP, DO.
+#   Kept as a separate local file so `git pull upstream main` never conflicts.
+#
+# Background (2026-07-26):
+#   The EC circuit booted into UART mode (green LED) while the other three came
+#   up blue. The EZO hardware protocol switch is "TX shorted to PGND at power-up
+#   with RX not driving" — and that procedure is IDENTICAL in both directions,
+#   so a boot that satisfies it TOGGLES the protocol every time. TX is SDA and
+#   PGND is probe ground; a conductivity probe in ~48 mS/cm seawater is the only
+#   low-impedance path to PGND among the four probes (pH/ORP/DO are gigaohm
+#   potentiometric), which is why EC was the only circuit affected.
+#
+#   Plock,1 blocks the hardware switch as well as the software I2C,n / Baud,n
+#   commands — the datasheet's manual-switch procedure opens with "Make sure
+#   Plock is set to 0". Ref: EZO pH datasheet v4.5, pp. 35, 38, 56, 60.
+#
+# NOTE: Plock lives in the EZO circuit, not in this firmware. It survives power
+#   loss, but a `Factory` reset or a swapped-in replacement circuit comes back
+#   UNLOCKED. Re-press Lock after either.
+#
+# NOTE: With Plock,1 the `*_change_address` API actions return *ER. Press the
+#   matching Unlock button first if you ever need to change an I2C address.
+# =============================================================================
+
+button:
+  # --- Lock (Plock,1) -------------------------------------------------------
+  - platform: template
+    name: "Lock EZO-pH (Plock)"
+    icon: mdi:lock
+    entity_category: "config"
+    on_press:
+      then:
+        - lambda: 'id(ph_ezo).send_custom("Plock,1");'
+    web_server:
+      sorting_group_id: sorting_group_config
+
+  - platform: template
+    name: "Lock EZO-EC (Plock)"
+    icon: mdi:lock
+    entity_category: "config"
+    on_press:
+      then:
+        - lambda: 'id(ec_ezo).send_custom("Plock,1");'
+    web_server:
+      sorting_group_id: sorting_group_config
+
+  - platform: template
+    name: "Lock EZO-ORP (Plock)"
+    icon: mdi:lock
+    entity_category: "config"
+    on_press:
+      then:
+        - lambda: 'id(orp_ezo).send_custom("Plock,1");'
+    web_server:
+      sorting_group_id: sorting_group_config
+
+  - platform: template
+    name: "Lock EZO-DO (Plock)"
+    icon: mdi:lock
+    entity_category: "config"
+    on_press:
+      then:
+        - lambda: 'id(do_ezo).send_custom("Plock,1");'
+    web_server:
+      sorting_group_id: sorting_group_config
+
+  # --- Lock all four at once ------------------------------------------------
+  - platform: template
+    name: "Lock ALL EZO Circuits (Plock)"
+    icon: mdi:lock-check
+    entity_category: "config"
+    on_press:
+      then:
+        - lambda: |-
+            id(ph_ezo).send_custom("Plock,1");
+            id(ec_ezo).send_custom("Plock,1");
+            id(orp_ezo).send_custom("Plock,1");
+            id(do_ezo).send_custom("Plock,1");
+        - logger.log: "Plock,1 sent to pH, EC, ORP and DO."
+    web_server:
+      sorting_group_id: sorting_group_config
+
+  # --- Unlock (Plock,0) — needed before any I2C address change --------------
+  - platform: template
+    name: "Unlock ALL EZO Circuits (Plock,0)"
+    icon: mdi:lock-open-variant
+    entity_category: "config"
+    disabled_by_default: true
+    on_press:
+      then:
+        - lambda: |-
+            id(ph_ezo).send_custom("Plock,0");
+            id(ec_ezo).send_custom("Plock,0");
+            id(orp_ezo).send_custom("Plock,0");
+            id(do_ezo).send_custom("Plock,0");
+        - logger.log: "Plock,0 sent — circuits can now switch protocol again."
+    web_server:
+      sorting_group_id: sorting_group_config
