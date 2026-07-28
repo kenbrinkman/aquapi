@@ -1,17 +1,54 @@
 ---
+# =============================================================================
+# Dallas DS18B20 temperature — ADDRESS-BASED (replaces temperature_dallas_index.yaml)
+# =============================================================================
+# Why address instead of index:
+#   With `index:`, the probes are numbered by their position in the ROM-sorted
+#   scan order. If a probe dies or is unplugged, the survivor is promoted to
+#   index 0 — so "Temperature" silently starts reporting the *other* probe, and
+#   its baked-in calibration is now applied to the wrong sensor. With
+#   `address:`, a missing probe simply goes unavailable and the other one keeps
+#   reporting itself. Probe swaps become explicit (edit the address here).
+#
+# HOW TO GET THE ADDRESSES (do this once, before using this file):
+#   1. Flash with the existing index-based file still included.
+#   2. Open the ESPHome logs and look for the one_wire bus dump at boot:
+#        [C][gpio.one_wire:xxx]: GPIO 1-wire bus:
+#        [C][gpio.one_wire:xxx]:   Found devices:
+#        [C][gpio.one_wire:xxx]:     0x1c3c01d075e1a428 (DS18B20)
+#        [C][gpio.one_wire:xxx]:     0x8e3c01d075f2b128 (DS18B20)
+#   3. Identify which is which: put ONE probe in a cup of warm water, watch
+#      which entity moves. Label that physical probe with a tag.
+#   4. Paste the addresses below, swap the include, re-flash.
+#
+# NOTE: the 4.7 kΩ 1-wire pull-up is ALREADY on the AquaPi board (R3, between
+# DATA and 3V3). Do not add another — a second pull-up in parallel halves the
+# effective resistance and can corrupt reads on longer runs.
+# =============================================================================
+
 substitutions:
   dallasPin: "16"
   update_temp: "60s"
 
+  # --- Probe ROM addresses -----------------------------------------------
+  # 64-bit 1-wire ROM codes, from the boot log (see header above).
+  # PLACEHOLDERS — replace before flashing, or both probes read Unknown.
+  addr_temp_1: "0x0000000000000000"  # T1 — display tank  (LABEL THIS PROBE)
+  addr_temp_2: "0x0000000000000000"  # T2 — sump          (LABEL THIS PROBE)
+
   # Calibration variables
   # 0C using Ice Water; 100C using Boiling Water
   # (calibration happens in °C, before the °F conversion filter)
+  #
   # Calibration Temp. 1
-  # 2026-07-08: T1 read 0.7°F low vs T2 (T2 = reference, correct probe).
-  # Applied +0.389°C offset to both datapoints (= +0.7°F after ×9/5 conversion).
-  # Shifts the whole line up without changing slope. T1 77.3°F -> 78.0°F.
-  cal_0: "0.389"
-  cal_100: "100.389"
+  # RESET 2026-07-28 for the rebuilt probe harness. The previous
+  # cal_0/cal_100 of 0.389/100.389 was a +0.7°F bias offset derived on
+  # 2026-07-08 against the OLD T2 as reference — that reference probe is
+  # dead and both probes are being re-terminated, so the old offset is
+  # meaningless. Re-derive after the rebuild: let both probes settle in the
+  # same water, then bias whichever reads low.
+  cal_0: "0.0"
+  cal_100: "100.0"
   # Cool/Warm thresholds in °F (was 23.5/28 °C)
   range_cool: "74.3"
   range_warm: "82.4"
@@ -36,9 +73,9 @@ one_wire:
     pin: ${dallasPin}
 
 sensor:
-  # Temperature Probe 1 - Uses index 0 (first sensor on the bus)
+  # Temperature Probe 1 - pinned to its ROM address
   - platform: dallas_temp
-    index: 0
+    address: ${addr_temp_1}
     id: temp_1
     icon: mdi:thermometer-water
     name: "Temperature"
@@ -67,19 +104,6 @@ sensor:
     web_server:
       sorting_group_id: sorting_group_temperature
       sorting_weight: 10
-
-  # Convert to Fahrenheit - Temp. 1
-  # - platform: template
-  #   name: "Temperature (°F)"
-  #   icon: mdi:thermometer
-  #   unit_of_measurement: "°F"
-  #   state_class: "measurement"
-  #   device_class: "temperature"
-  #   id: temp_f
-  #   lambda: |-
-  #     return id(temp_1).state * 9 / 5 + 32;
-  #   web_server:
-  #     sorting_group_id: sorting_group_temperature
 
   # Calibration Temp. at 0C
   - platform: template
@@ -111,9 +135,9 @@ sensor:
     web_server:
       sorting_group_id: sorting_group_temperature
 
-  # Temperature Probe 2 - Uses index 1 (second sensor on the bus)
+  # Temperature Probe 2 - pinned to its ROM address
   - platform: dallas_temp
-    index: 1
+    address: ${addr_temp_2}
     id: temp_2
     icon: mdi:thermometer-water
     name: "Temperature 2"
@@ -140,20 +164,6 @@ sensor:
     web_server:
       sorting_group_id: sorting_group_temperature
       sorting_weight: 60
-
-  # Convert to Fahrenheit - Temp. 2
-  # - platform: template
-  #   name: "Temperature 2 (°F)"
-  #   icon: mdi:thermometer
-  #   unit_of_measurement: "°F"
-  #   state_class: "measurement"
-  #   device_class: "temperature"
-  #   id: temp_f_2
-  #   lambda: |-
-  #     return id(temp_2).state * 9 / 5 + 32;
-  #   web_server:
-  #     sorting_group_id: sorting_group_temperature
-  #     sorting_weight: 69
 
   # Calibration Temp. 2 at 0C
   - platform: template
@@ -223,14 +233,14 @@ text_sensor:
     icon: mdi:thermometer-alert
     update_interval: "${update_temp}"
     lambda: |-
-      if (id(temp_1).state <= id(range_cool).state) {
+      if (isnan(id(temp_1).state)) {
+        return {"Unknown"};
+      } else if (id(temp_1).state <= id(range_cool).state) {
         return {"Cool"};
       } else if (id(temp_1).state >= id(range_warm).state) {
         return {"Warm"};
-      } else if (!isnan(id(temp_1).state)) {
-        return {"OK"};
       } else {
-        return {"Unknown"};
+        return {"OK"};
       }
     web_server:
       sorting_group_id: sorting_group_temperature
@@ -243,14 +253,14 @@ text_sensor:
     icon: mdi:thermometer-alert
     update_interval: "${update_temp}"
     lambda: |-
-      if (id(temp_2).state <= id(range_cool_2).state) {
+      if (isnan(id(temp_2).state)) {
+        return {"Unknown"};
+      } else if (id(temp_2).state <= id(range_cool_2).state) {
         return {"Cool"};
       } else if (id(temp_2).state >= id(range_warm_2).state) {
         return {"Warm"};
-      } else if (!isnan(id(temp_2).state)) {
-        return {"OK"};
       } else {
-        return {"Unknown"};
+        return {"OK"};
       }
     web_server:
       sorting_group_id: sorting_group_temperature

@@ -36,7 +36,12 @@ packages:
   # ESPHome OTA (from common/device_base_ethernet.yaml) handles all updates:
   #   git pull && esphome run aquapi_config_ethernet.yaml
   # ota_https: !include common/ota_https.yaml
+  # Temperature: flash ONCE with the _index file to read the probe ROM
+  # addresses out of the boot log, paste them into _address.yaml, then swap
+  # the comment below. Address-based survives a probe dying/being swapped;
+  # index-based silently promotes the survivor to index 0.
   dallas: !include common/temperature_dallas_index.yaml
+  # dallas: !include common/temperature_dallas_address.yaml
   water_level: !include common/water_level.yaml
   binary: !include common/binary_ethernet.yaml   # no leak sensor (GPIO27 free)
   rodi_flow: !include common/rodi_flow.yaml       # RODI feed-line flow meter on GPIO27

@@ -24,6 +24,7 @@ packages:
   # i2c_detection: !include common/i2c_detection.yaml
   # dallas: !include common/temperature_dallas.yaml
   dallas: !include common/temperature_dallas_index.yaml
+  # dallas: !include common/temperature_dallas_address.yaml   # see _address.yaml header
   water_level: !include common/water_level.yaml
   binary: !include common/binary.yaml
   ezo_ph: !include common/ezo_ph.yaml
