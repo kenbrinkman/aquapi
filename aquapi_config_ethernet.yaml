@@ -20,6 +20,13 @@ substitutions:
   hardware_variant: "Standard - Inverted Optical (Ethernet)"
   import: "false"
 
+  # Log level. device_base_ethernet.yaml defaults this to INFO, which SUPPRESSES
+  # the [C]-level boot config dump — including the gpio.one_wire bus scan that
+  # lists the DS18B20 ROM addresses. Set this to "DEBUG" when you need to read
+  # those addresses (see common/temperature_dallas_address.yaml), then put it
+  # back. Addresses were captured 2026-07-30, so INFO is fine again.
+  logger: "INFO"
+
   # --- EC scoring rescaled for seawater, in mS/cm (overrides water_quality.yaml
   # freshwater defaults). Reef ≈ 53 mS/cm @ 35 ppt; 1 ppt ≈ 1.5 mS/cm.
   wq_ec_score_deviation_multiplier: "10.0"  # ≈ −15 pts per ppt off mid-band
@@ -36,12 +43,13 @@ packages:
   # ESPHome OTA (from common/device_base_ethernet.yaml) handles all updates:
   #   git pull && esphome run aquapi_config_ethernet.yaml
   # ota_https: !include common/ota_https.yaml
-  # Temperature: flash ONCE with the _index file to read the probe ROM
-  # addresses out of the boot log, paste them into _address.yaml, then swap
-  # the comment below. Address-based survives a probe dying/being swapped;
-  # index-based silently promotes the survivor to index 0.
-  dallas: !include common/temperature_dallas_index.yaml
-  # dallas: !include common/temperature_dallas_address.yaml
+  # Temperature: ROM addresses captured from the boot log 2026-07-30 and
+  # pasted into _address.yaml, so the build is now address-based. Address-based
+  # survives a probe dying/being swapped; index-based silently promotes the
+  # survivor to index 0 and applies the dead probe's calibration to it.
+  # Keep _index.yaml around only for re-reading addresses after a rebuild.
+  # dallas: !include common/temperature_dallas_index.yaml
+  dallas: !include common/temperature_dallas_address.yaml
   water_level: !include common/water_level.yaml
   binary: !include common/binary_ethernet.yaml   # no leak sensor (GPIO27 free)
   rodi_flow: !include common/rodi_flow.yaml       # RODI feed-line flow meter on GPIO27

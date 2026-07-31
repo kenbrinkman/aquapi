@@ -10,16 +10,24 @@
 #   `address:`, a missing probe simply goes unavailable and the other one keeps
 #   reporting itself. Probe swaps become explicit (edit the address here).
 #
-# HOW TO GET THE ADDRESSES (do this once, before using this file):
+# HOW TO GET THE ADDRESSES (done 2026-07-30 — kept for the next rebuild):
 #   1. Flash with the existing index-based file still included.
-#   2. Open the ESPHome logs and look for the one_wire bus dump at boot:
-#        [C][gpio.one_wire:xxx]: GPIO 1-wire bus:
-#        [C][gpio.one_wire:xxx]:   Found devices:
-#        [C][gpio.one_wire:xxx]:     0x1c3c01d075e1a428 (DS18B20)
-#        [C][gpio.one_wire:xxx]:     0x8e3c01d075f2b128 (DS18B20)
-#   3. Identify which is which: put ONE probe in a cup of warm water, watch
+#   2. GOTCHA: the bus dump is logged at CONFIG level, which is SUPPRESSED at
+#      the default logger level of INFO set in common/device_base_ethernet.yaml.
+#      Set `logger: "DEBUG"` in the top-level substitutions of the device YAML
+#      first, or the dump never reaches the log and it looks like the reboot
+#      failed. Revert to INFO once captured.
+#   3. Open the ESPHome logs and look for the one_wire bus dump at boot:
+#        [C][gpio.one_wire:020]: GPIO 1-wire bus:
+#        [C][gpio.one_wire:087]:   Found devices:
+#        [C][gpio.one_wire:090]:     0x8a00000023e44428 (DS18B20)
+#        [C][gpio.one_wire:090]:     0xbf00000021744328 (DS18B20)
+#      The later [C][dallas.temp.sensor:033] lines are more useful still —
+#      they print the address each sensor actually resolved to, in YAML order,
+#      which maps index -> address without any guessing.
+#   4. Identify which is which: put ONE probe in a cup of warm water, watch
 #      which entity moves. Label that physical probe with a tag.
-#   4. Paste the addresses below, swap the include, re-flash.
+#   5. Paste the addresses below, swap the include, re-flash.
 #
 # NOTE: the 4.7 kΩ 1-wire pull-up is ALREADY on the AquaPi board (R3, between
 # DATA and 3V3). Do not add another — a second pull-up in parallel halves the
@@ -31,10 +39,22 @@ substitutions:
   update_temp: "60s"
 
   # --- Probe ROM addresses -----------------------------------------------
-  # 64-bit 1-wire ROM codes, from the boot log (see header above).
-  # PLACEHOLDERS — replace before flashing, or both probes read Unknown.
-  addr_temp_1: "0x0000000000000000"  # T1 — display tank  (LABEL THIS PROBE)
-  addr_temp_2: "0x0000000000000000"  # T2 — sump          (LABEL THIS PROBE)
+  # 64-bit 1-wire ROM codes, captured from the boot log 2026-07-30 23:57
+  # after the REV D.2 junction box rebuild. Both enumerated on GPIO16 at
+  # 12-bit resolution.
+  #
+  # VERIFIED 2026-07-30 by hand-warming the probe in the junction box's T1
+  # terminal: 'Temperature 2' rose to 33.94°C while 'Temperature' held at
+  # 25.56°C. So the T1 terminal is 0xbf...4328.
+  #
+  # DO NOT infer the mapping from the order of the [C][dallas.temp.sensor:033]
+  # dump lines — those print in ROM-sorted bus order, NOT YAML declaration
+  # order, so reading them top-to-bottom as temp_1/temp_2 gives you the probes
+  # swapped. Only the hand-warm test is authoritative. (Consistent with the
+  # 1-wire search order: 0xbf..4328 sorts before 0x8a..4428 LSB-first, so the
+  # T1 terminal was index 0 under the old index-based config too.)
+  addr_temp_1: "0xbf00000021744328"  # T1 terminal on the junction box
+  addr_temp_2: "0x8a00000023e44428"  # T2 terminal on the junction box
 
   # Calibration variables
   # 0C using Ice Water; 100C using Boiling Water
