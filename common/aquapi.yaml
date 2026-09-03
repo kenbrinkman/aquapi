@@ -5,7 +5,7 @@ substitutions:
   # removed upstream in "App version rework (#147)" and is included by nothing —
   # editing that file has no effect. Bump here.
   # 26.6.7 = EZO Plock buttons + trimmed I2C presence detection (2026-07-26)
-  app_version: "26.6.7"
+  app_version: "26.6.8"
   # github URL
   github_url: "https://github.com/TheRealFalseReality/aquapi"
 

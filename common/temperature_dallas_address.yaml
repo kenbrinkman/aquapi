@@ -22,6 +22,13 @@
 #        [C][gpio.one_wire:087]:   Found devices:
 #        [C][gpio.one_wire:090]:     0x8a00000023e44428 (DS18B20)
 #        [C][gpio.one_wire:090]:     0xbf00000021744328 (DS18B20)
+#   ⚠ CAPTURE GOTCHA (cost a cycle 2026-09-02): the dump is emitted ~3 s after
+#      boot, BEFORE the API log stream reconnects. Pressing the Restart button
+#      (or HA's restart) while `esphome logs` is attached MISSES IT ENTIRELY —
+#      the stream drops on reboot and comes back ~6 s later, after dump_config
+#      has already run. You get a clean-looking log with no [C] block at all.
+#      USE `esphome run`, which reconnects immediately after its own OTA and
+#      reliably catches the dump from [I][app:151] onward.
 #      The later [C][dallas.temp.sensor:033] lines are more useful still —
 #      they print the address each sensor actually resolved to, in YAML order,
 #      which maps index -> address without any guessing.
@@ -31,12 +38,47 @@
 #
 # NOTE: the 4.7 kΩ 1-wire pull-up is ALREADY on the AquaPi board (R3, between
 # DATA and 3V3). Do not add another — a second pull-up in parallel halves the
-# effective resistance and can corrupt reads on longer runs.
+# effective resistance and can corrupt reads on longer runs. (REV E.1 of the
+# junction box deleted the DROK V1738 carriers, which each carried their own
+# on-board 4.7 kΩ; the bus is now on R3 alone, as this note always claimed.)
+#
+# =============================================================================
+# FAILURE VISIBILITY — read this before touching the `filters:` blocks
+# =============================================================================
+# Until 2026-09-02 both sensors carried `filter_out: NAN` plus a range lambda
+# that `return {}`-ed out-of-band values. BOTH OF THOSE DROP THE READING: the
+# component publishes nothing, the entity never transitions to unavailable, and
+# Home Assistant serves the last good state forever. On 2026-09-01 that hid two
+# dead probes for nine days — temp_1 pinned at 74.8625030517578 the whole time,
+# indistinguishable from a healthy stable tank.
+#
+# The rule that came out of it: A FILTER THAT HIDES BAD DATA ALSO HIDES NO DATA.
+# So this file now fails loudly, in three layers:
+#
+#   1. The range lambda returns NAN (not `{}`) for an implausible reading, so
+#      the bad value is PUBLISHED as NAN and HA shows "unknown".
+#   2. A `timeout:` filter publishes NAN if nothing arrives for ${stale_timeout},
+#      which catches a bus that stops answering entirely — a cut wire, a pulled
+#      WAGO lever, a ROM address that is not on the bus. No range filter can
+#      ever see that case.
+#   3. A per-probe `device_class: problem` binary sensor mirrors isnan(), so the
+#      fault is a first-class HA entity you can alert and badge on, rather than
+#      something you have to notice by staring at a number.
+#
+# ⚠ If you ever add a plausibility filter to ANY sensor on this device, add the
+#   matching staleness check in the SAME change. Never re-introduce
+#   `filter_out: NAN` here.
 # =============================================================================
 
 substitutions:
   dallasPin: "16"
   update_temp: "60s"
+
+  # Staleness watchdog. If a sensor publishes nothing for this long, emit NAN so
+  # the entity goes "unknown" in HA instead of freezing on its last good value.
+  # Must be a comfortable multiple of update_temp (60s) so a single missed read
+  # does not trip it. 300s == 5 missed reads.
+  stale_timeout: "300s"
 
   # --- Probe ROM addresses -----------------------------------------------
   # 64-bit 1-wire ROM codes, captured from the boot log 2026-07-30 23:57
@@ -53,8 +95,31 @@ substitutions:
   # swapped. Only the hand-warm test is authoritative. (Consistent with the
   # 1-wire search order: 0xbf..4328 sorts before 0x8a..4428 LSB-first, so the
   # T1 terminal was index 0 under the old index-based config too.)
-  addr_temp_1: "0xbf00000021744328"  # T1 terminal on the junction box
-  addr_temp_2: "0x8a00000023e44428"  # T2 terminal on the junction box
+  # ⚠⚠ STALE AS OF 2026-09-02 — THESE ARE THE ADDRESSES OF THE TWO DEAD
+  #    AMAZON/CLONE PROBES. The REV E.1 junction box rebuild fits two BRAND NEW
+  #    Olimex SNS-TMP-DS18B20-MAXIM probes, which have DIFFERENT ROM ADDRESSES.
+  #    Until they are captured and pasted here, both sensors will match nothing
+  #    on the bus and sit at NAN — which now shows up as "unknown" in HA plus
+  #    both "Temp Probe Fault" binary sensors ON. That is CORRECT behaviour and
+  #    is NOT a wiring fault. Follow the capture procedure above.
+  #
+  #    Unambiguous capture (better than the hand-warm test): boot with ONLY the
+  #    T1 probe's DAT lever closed. The bus dump then lists exactly ONE address
+  #    — that is addr_temp_1, with zero inference. Close T2's lever, reboot,
+  #    and the newly appeared address is addr_temp_2.
+  # ✅ T1 CAPTURED 2026-09-02 20:48 — new Olimex probe. Method: booted with only
+  #    T1's DAT lever closed, so the bus scan listed exactly ONE device:
+  #      [C][gpio.one_wire:090]:     0xb100000025f23928 (DS18B20)
+  #    No inference from dump line order, no hand-warm test needed.
+  addr_temp_1: "0xb100000025f23928"  # T1 terminal — NEW Olimex, verified alone on bus
+  # ✅ T2 CAPTURED 2026-09-02 20:57 — new Olimex probe. With T2's lever closed the
+  #    bus listed TWO devices; T1 was already known, so T2 is the other one:
+  #      0x6e00000025e47428 (DS18B20)   <- T2, new
+  #      0xb100000025f23928 (DS18B20)   <- T1, captured alone at 20:48
+  #    ⚠ Note they print in ROM-SORTED order (0x6e before 0xb1), NOT YAML order —
+  #    reading the dump top-to-bottom as temp_1/temp_2 would have SWAPPED them.
+  #    Identification here came from the one-probe-at-a-time capture, not the order.
+  addr_temp_2: "0x6e00000025e47428"  # T2 terminal — NEW Olimex, by elimination
 
   # Calibration variables
   # 0C using Ice Water; 100C using Boiling Water
@@ -103,13 +168,15 @@ sensor:
     device_class: "temperature"
     unit_of_measurement: "°F"
     update_interval: "${update_temp}"
+    resolution: 12
+    accuracy_decimals: 2
     filters:
-      - filter_out: NAN
-      # Reject implausible raw readings (°C, pre-calibration):
-      # 85.0 = DS18B20 power-on-reset default, 0.0 = bus glitch.
-      # Anything outside 4-40°C (39-104°F) is not a real tank temp.
+      # ⚠ DELIBERATELY NO `filter_out: NAN` — see FAILURE VISIBILITY in the header.
+      # Reject implausible raw readings (°C, pre-calibration) by PUBLISHING NAN,
+      # never by dropping them: 85.0 = DS18B20 power-on-reset default,
+      # 0.0 / -127 = bus glitch. Outside 4-40°C (39-104°F) is not a tank temp.
       - lambda: |-
-          if (x < 4.0 || x > 40.0) return {};
+          if (isnan(x) || x < 4.0 || x > 40.0) return NAN;
           return x;
       - calibrate_linear:
           method: least_squares
@@ -118,6 +185,9 @@ sensor:
             - 100.0 -> ${cal_100}
       # Convert to Fahrenheit (calibration above stays in °C)
       - lambda: return x * 9.0 / 5.0 + 32.0;
+      # Watchdog — MUST BE LAST. Nothing published for ${stale_timeout} -> NAN.
+      # This is the layer that catches a bus which stops answering completely.
+      - timeout: ${stale_timeout}
     on_value:
       then:
         - component.update: temp_range
@@ -165,11 +235,12 @@ sensor:
     device_class: "temperature"
     unit_of_measurement: "°F"
     update_interval: "${update_temp}"
+    resolution: 12
+    accuracy_decimals: 2
     filters:
-      - filter_out: NAN
-      # Reject implausible raw readings (°C, pre-calibration) — see Temp 1.
+      # ⚠ DELIBERATELY NO `filter_out: NAN` — see Temp 1 and the header.
       - lambda: |-
-          if (x < 4.0 || x > 40.0) return {};
+          if (isnan(x) || x < 4.0 || x > 40.0) return NAN;
           return x;
       - calibrate_linear:
           method: least_squares
@@ -178,6 +249,8 @@ sensor:
             - 100.0 -> ${cal_100_temp_2}
       # Convert to Fahrenheit (calibration above stays in °C)
       - lambda: return x * 9.0 / 5.0 + 32.0;
+      # Watchdog — MUST BE LAST. See Temp 1.
+      - timeout: ${stale_timeout}
     on_value:
       then:
         - component.update: temp_range_2
@@ -217,6 +290,37 @@ sensor:
       sorting_group_id: sorting_group_temperature
       sorting_weight: 69
 
+  # --- Probe agreement --------------------------------------------------------
+  # T1 and T2 sit in the SAME 75 gal sump, so in steady state they must track
+  # each other. This is the ONLY check that can catch a probe frozen on a
+  # PLAUSIBLE value — the failure mode that hid two dead probes for nine days.
+  # A range filter cannot see it (74.86°F is a perfectly sensible tank temp) and
+  # neither can the ${stale_timeout} watchdog (a frozen DS18B20 keeps happily
+  # publishing its stale scratchpad value every ${update_temp}). But real sump
+  # temperature drifts a couple of °F across a day, so a stuck probe walks away
+  # from its neighbour within hours and this number climbs.
+  #
+  # NAN if EITHER probe is faulted — a missing probe is reported by the
+  # "Temp Probe Fault" sensors, not here, so the two alerts stay independent.
+  - platform: template
+    name: "Temp Probe Disagreement"
+    id: temp_delta
+    icon: mdi:thermometer-minus
+    unit_of_measurement: "°F"
+    accuracy_decimals: 2
+    state_class: "measurement"
+    device_class: "temperature"
+    entity_category: "diagnostic"
+    update_interval: "${update_temp}"
+    lambda: |-
+      if (isnan(id(temp_1).state) || isnan(id(temp_2).state)) {
+        return NAN;
+      }
+      return fabs(id(temp_1).state - id(temp_2).state);
+    web_server:
+      sorting_group_id: sorting_group_temperature
+      sorting_weight: 70
+
 binary_sensor:
   - platform: template
     name: Ideal Temperature
@@ -244,6 +348,62 @@ binary_sensor:
     web_server:
       sorting_group_id: sorting_group_temperature
       sorting_weight: 69
+
+  # --- Probe fault ------------------------------------------------------------
+  # device_class problem => true means PROBLEM (HA renders "Detected" / red).
+  # Faulted whenever the sensor holds no valid number, which now covers every
+  # failure mode: probe unplugged or dead, ROM address not present on the bus
+  # (e.g. a probe was swapped and addr_temp_* above was not updated), an
+  # implausible reading such as the 85°C power-on-reset value, or the
+  # ${stale_timeout} watchdog having fired on a silent bus.
+  #
+  # This is the entity to alert on. Do NOT alert on the temperature going
+  # "unavailable" — that only ever fires when the whole AquaPi drops off the
+  # network, never when a single probe dies.
+  - platform: template
+    name: "Temp Probe Fault"
+    id: temp_1_fault
+    icon: mdi:thermometer-alert
+    device_class: problem
+    lambda: |-
+      return isnan(id(temp_1).state);
+    web_server:
+      sorting_group_id: sorting_group_temperature
+      sorting_weight: 13
+
+  - platform: template
+    name: "Temp Probe 2 Fault"
+    id: temp_2_fault
+    icon: mdi:thermometer-alert
+    device_class: problem
+    lambda: |-
+      return isnan(id(temp_2).state);
+    web_server:
+      sorting_group_id: sorting_group_temperature
+      sorting_weight: 63
+
+  # Trips when the two probes drift apart by more than the configurable
+  # threshold. delayed_on debounces it: a single odd sample, or the transient
+  # while one probe is lifted out of the water for service, must not alarm.
+  #
+  # Returns false while the delta is NAN. That is deliberate: a faulted probe is
+  # already reported by "Temp Probe Fault", and double-alarming one failure as
+  # two problems is how alerting gets ignored.
+  - platform: template
+    name: "Temp Probes Disagree"
+    id: temp_probes_disagree
+    icon: mdi:thermometer-alert
+    device_class: problem
+    filters:
+      - delayed_on: 15min
+    lambda: |-
+      if (isnan(id(temp_delta).state)) {
+        return false;
+      }
+      return id(temp_delta).state > id(temp_delta_max).state;
+    web_server:
+      sorting_group_id: sorting_group_temperature
+      sorting_weight: 71
 
 text_sensor:
   # Temperature Range 1
@@ -370,3 +530,26 @@ number:
     web_server:
       sorting_group_id: sorting_group_temperature
       sorting_weight: 69
+
+  # Max tolerated spread between the two sump probes before "Temp Probes
+  # Disagree" trips. Genuine DS18B20-to-DS18B20 spread on the bench after the
+  # 2026-07-30 flash was 0.2°F, and datasheet tolerance is +/-0.9°F, so 1.0°F is
+  # comfortably above honest disagreement while still catching a stuck probe
+  # within hours of it sticking. Tune DOWN once both probes are wet, settled and
+  # calibrated — the tighter this is, the sooner a freeze is caught.
+  - platform: template
+    name: "Temp Probe Max Disagreement °F"
+    id: temp_delta_max
+    icon: mdi:thermometer-alert
+    optimistic: true
+    mode: box
+    min_value: 0.1
+    max_value: 10
+    step: 0.1
+    restore_value: true
+    initial_value: 1.0
+    entity_category: "Config"
+    device_class: "temperature"
+    web_server:
+      sorting_group_id: sorting_group_temperature
+      sorting_weight: 72
