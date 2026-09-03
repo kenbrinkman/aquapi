@@ -1,0 +1,97 @@
+---
+# =============================================================================
+# AquaPi — ESPHome Device Builder (Tower, 192.168.1.10:6052)
+# =============================================================================
+# This is the ONLY AquaPi file that lives in the container. Every package it
+# builds is pulled from GitHub at build time, so the container CANNOT build a
+# change that has not been pushed. That is the entire point of this layout.
+#
+#   To change firmware behaviour:  edit the repo on the Mac -> commit -> PUSH
+#                                  -> Install from Device Builder.
+#   Editing THIS file changes only the top-level knobs below.
+#
+#   Repo:   https://github.com/kenbrinkman/aquapi   (fork)
+#           upstream = TheRealFalseReality/aquapi   (never push there)
+#   Mac:    ~/Documents/Claude/Projects/AquaPi/aquapi-main
+#   Device: 192.168.1.50 (wired, W5500)
+#
+# Mirrors aquapi_config_ethernet.yaml in the repo. If you add or remove a
+# package there, mirror it in the files: list below.
+# =============================================================================
+
+substitutions:
+  name: "aquapi-standard"
+  project_name: "therealfalsereality.aquapi-standard"
+  do_temp_comp_source: "temp_1"
+  do_salinity_comp_source: "sensor_salinity"
+
+  # Hardware Variant
+  hardware_variant: "Standard - Inverted Optical (Ethernet)"
+  import: "false"
+
+  # Log level. device_base_ethernet.yaml defaults this to INFO, which SUPPRESSES
+  # the [C]-level boot config dump — including the gpio.one_wire bus scan that
+  # lists the DS18B20 ROM addresses. Set to "DEBUG" when you need to read those
+  # addresses, then put it back.
+  logger: "INFO"
+
+  # --- EC scoring rescaled for seawater, in mS/cm (overrides water_quality.yaml
+  # freshwater defaults). Reef ~53 mS/cm @ 35 ppt; 1 ppt ~ 1.5 mS/cm.
+  wq_ec_score_deviation_multiplier: "10.0"  # ~ -15 pts per ppt off mid-band
+  wq_ec_good_offset: "2"    # Caution when > 2 mS/cm (~1.3 ppt) outside band
+  wq_ec_alert_offset: "5"   # Alert when > 5 mS/cm (~3.3 ppt) outside band
+
+# =============================================================================
+# Remote packages — pulled from the fork, in the SAME ORDER as the repo config.
+# =============================================================================
+# refresh: 0s = re-fetch on every build. Without it ESPHome caches for 1 day,
+# which means a build could silently use yesterday's common/*.yaml after you
+# push. Do not raise this while iterating.
+#
+# For a known-good build, replace `ref: main` with an immutable tag or commit
+# SHA — then "what is on the device" is an exact commit, not a memory.
+#
+# ota_https is intentionally ABSENT: the cloud HTTP-OTA flashes STOCK Wi-Fi
+# firmware and factory-resets the device, which would wipe this Ethernet build
+# off the network. ezo_co2 / ezo_pmp / ezo_pmp_duo absent: no hardware.
+# temperature_dallas_index.yaml absent: address-based addressing is live.
+packages:
+  aquapi:
+    url: https://github.com/kenbrinkman/aquapi
+    ref: main
+    refresh: 0s
+    files:
+      - common/device_base_ethernet.yaml   # WiFi-free base
+      - common/ethernet.yaml               # W5500 wired networking
+      - common/espboard.yaml
+      - common/temperature_dallas_address.yaml
+      - common/water_level.yaml
+      - common/binary_ethernet.yaml        # no leak sensor (GPIO27 free)
+      - common/rodi_flow.yaml              # RODI feed-line flow meter, GPIO27
+      - common/ezo_ph.yaml
+      - common/ezo_ec.yaml
+      - common/ezo_orp.yaml
+      - common/water_quality.yaml
+      - common/ezo_do.yaml
+      - common/ezo_lock.yaml               # NOT ezo_commands.yaml (undefined IDs)
+      - common/i2c_detection_reef.yaml     # NOT i2c_detection.yaml (pump spam)
+      - common/aquapi.yaml
+
+# =============================================================================
+# Container-side overrides (merged on top of the packages above)
+# =============================================================================
+
+# The Mac flashed with `--device 192.168.1.50`. Device Builder has no such flag,
+# so pin the OTA target here instead of trusting mDNS for aquapi-standard.local.
+ethernet:
+  use_address: 192.168.1.50
+
+# ---- Toolchain pin — LEAVE COMMENTED FOR THE FIRST ATTEMPT -------------------
+# The Mac built this on ESPHome 2026.6.2 / esp-idf 5.5.4 / pioarduino 55.03.39.
+# The container is on 2026.8.2 and espboard.yaml pins no framework, so the
+# toolchain moves too. Try the unpinned build FIRST — if it fails to compile,
+# uncomment this to isolate the ESPHome-core change from the toolchain change.
+# esp32:
+#   framework:
+#     version: 5.5.4
+#     platform_version: https://github.com/pioarduino/platform-espressif32/releases/download/55.03.39/platform-espressif32.zip
