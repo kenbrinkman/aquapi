@@ -1,0 +1,41 @@
+---
+# =============================================================================
+# common/reef_overrides.yaml — the reef-specific knobs, in ONE place
+# =============================================================================
+# Every value here was previously duplicated in BOTH top-level configs:
+# aquapi_config_ethernet.yaml (Mac CLI) and device-builder/aquapi.yaml (the
+# ESPHome Device Builder container). Editing one and not the other meant a
+# flash silently used the stale value, with no error to say so.
+#
+# ⚠⚠ THIS PACKAGE MUST BE LISTED **LAST** in both configs.
+# ESPHome merges packages in order and the LAST one wins. Listed before
+# device_base_ethernet.yaml / water_quality.yaml, their defaults would silently
+# clobber these (name would revert to "esp32", the EC bands to freshwater).
+# Verified by experiment 2026-09-03, not assumed: the docs only promise that
+# MAIN-config substitutions beat package ones, and these now live in a package.
+# Confirmed for both forms — a packages: mapping (CLI) and a remote-package
+# files: list (container), which esphome keys as "<filename><idx>" so list
+# order is merge order.
+# =============================================================================
+substitutions:
+  name: "aquapi-standard"
+  project_name: "therealfalsereality.aquapi-standard"
+  do_temp_comp_source: "temp_1"
+  do_salinity_comp_source: "sensor_salinity"
+
+  # Hardware Variant
+  hardware_variant: "Standard - Inverted Optical (Ethernet)"
+  import: "false"
+
+  # Log level. device_base_ethernet.yaml defaults this to INFO, which SUPPRESSES
+  # the [C]-level boot config dump — including the gpio.one_wire bus scan that
+  # lists the DS18B20 ROM addresses. Set this to "DEBUG" when you need to read
+  # those addresses (see common/temperature_dallas_address.yaml), then put it
+  # back.
+  logger: "INFO"
+
+  # --- EC scoring rescaled for seawater, in mS/cm (overrides water_quality.yaml
+  # freshwater defaults). Reef ≈ 53 mS/cm @ 35 ppt; 1 ppt ≈ 1.5 mS/cm.
+  wq_ec_score_deviation_multiplier: "10.0"  # ≈ −15 pts per ppt off mid-band
+  wq_ec_good_offset: "2"    # Caution when > 2 mS/cm (~1.3 ppt) outside band
+  wq_ec_alert_offset: "5"   # Alert when > 5 mS/cm (~3.3 ppt) outside band
