@@ -93,41 +93,41 @@ substitutions:
   #    warning header on that file; the old "keep _index.yaml for re-reading
   #    addresses" advice is retired.
   #
-  # ⚠⚠ THE T1/T2 ASSIGNMENT BELOW IS ARBITRARY AND UNVERIFIED. Both addresses
-  #    came from a single dump, which prints in ROM-SORTED bus order, NOT YAML
-  #    declaration order. Nothing here identifies which physical probe is in
-  #    which WAGO terminal.
+  # ✅ T1/T2 MAPPING VERIFIED 2026-09-06 ~15:20 — hand-warm test, one probe at a
+  #    time. Lifted the probe wired to the T1 terminal, held it in hand, watched
+  #    'Temperature' rise and 'Temperature 2' hold. Returned it, lifted the T2
+  #    probe, watched 'Temperature 2' rise. Both tracked their own entity, so the
+  #    assignment below is CONFIRMED, not inferred from dump order.
   #
-  # 🔑 THAT IS DELIBERATE, AND IT IS SAFE *ONLY* BECAUSE OF THREE FACTS THAT ARE
-  #    TRUE TODAY (2026-09-06) AND MUST BE RE-CHECKED BEFORE RELYING ON IT AGAIN:
-  #      1. cal_0 / cal_100 are 0.0 / 100.0 on BOTH probes — no per-probe bias is
-  #         baked in, so a swap applies no wrong correction to anything.
-  #      2. Both probes sit in the SAME sump water, so there is no second body
-  #         whose reading a swap could misattribute.
-  #      3. The new probes carry no physical labels yet.
-  #    Under those conditions the mapping is a LABELLING exercise, not a config
-  #    correction: whichever probe moves 'Temperature' IS T1, by definition.
-  #    ⚠ The moment ANY of the three stops being true — a calibration offset is
-  #      entered, a probe moves to the display tank, or a probe gets a tag — the
-  #      one-probe-at-a-time capture below becomes mandatory again.
+  # 🔑 The addresses were pasted in blind (a coin flip) and came out right, but
+  #    do NOT read that as "the dump order matches YAML order" — it does not, and
+  #    it was luck. The hand-warm test is what makes this line trustworthy.
   #
-  # 🔻 OWED: cup test. Lift ONE probe into warm water and watch which entity
-  #    moves. Whichever it is, put a physical tag on that probe naming it, then
-  #    replace this block with the verified mapping. Until that is done, treat
-  #    T1/T2 as interchangeable names for "one of the two sump probes".
+  # ⚠ Keep the hand-warm under ~100 °F. The range lambda below NANs anything
+  #   above 40 °C (104 °F), so a hot-water cup makes a healthy probe read
+  #   "unknown" mid-test and look like the failure you are testing for. Body
+  #   heat is ideal: it moved both probes ~5 °F, which is far more than enough.
   #
-  # For a future rebuild where the mapping DOES matter, the unambiguous method:
+  # 🔑 BONUS, worth remembering: the hand-warm doubles as a LIVENESS KICK. HA's
+  #   reef_sump_t{1,2}_movement_1h helpers (statistics, distance_absolute) sat at
+  #   0.0 after the outage because the sump was drifting at only 0.20 °F/h and
+  #   the 12-bit quantum is 0.1125 °F — a HEALTHY probe needs ~34 min to move one
+  #   step, so the vote would not seat the second probe for half an hour. Warming
+  #   each probe by hand pushed both helpers to 5.06 and the verdict reached OK
+  #   within two minutes.
+  #
+  # For a future rebuild, the zero-inference method (no hand-warm needed):
   #    boot with ONLY the T1 probe's DAT lever closed. The bus dump then lists
-  #    exactly ONE address — that is addr_temp_1, with zero inference. Close
-  #    T2's lever, reboot, and the newly appeared address is addr_temp_2.
+  #    exactly ONE address — that is addr_temp_1. Close T2's lever, reboot, and
+  #    the newly appeared address is addr_temp_2.
   #
   # HISTORICAL — superseded, kept so an old log line can still be identified:
   #    0xbf00000021744328 / 0x8a00000023e44428  dead Amazon/clone probes (7/30)
   #    0xb100000025f23928 / 0x6e00000025e47428  Olimex probes, removed 9/06 after
   #                                             the intermittent short (torched
   #                                             heat-shrink, see project docs)
-  addr_temp_1: "0x40000010ab151428"  # ⚠ UNVERIFIED which terminal — see above
-  addr_temp_2: "0x8b000010ab7bbb28"  # ⚠ UNVERIFIED which terminal — see above
+  addr_temp_1: "0x40000010ab151428"  # T1 terminal — DigiKey, hand-warm verified 9/06
+  addr_temp_2: "0x8b000010ab7bbb28"  # T2 terminal — DigiKey, hand-warm verified 9/06
 
   # Calibration variables
   # 0C using Ice Water; 100C using Boiling Water
