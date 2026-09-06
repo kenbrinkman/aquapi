@@ -32,7 +32,10 @@ substitutions:
   # lists the DS18B20 ROM addresses. Set this to "DEBUG" when you need to read
   # those addresses (see common/temperature_dallas_address.yaml), then put it
   # back.
-  logger: "INFO"
+  # 2026-09-06: DEBUG to capture the new DigiKey DS18B20 ROM addresses from the
+  # boot dump. PUT THIS BACK TO "INFO" in the same change that pastes the
+  # addresses into common/temperature_dallas_address.yaml.
+  logger: "DEBUG"
 
   # --- EC scoring rescaled for seawater, in mS/cm (overrides water_quality.yaml
   # freshwater defaults). Reef ≈ 53 mS/cm @ 35 ppt; 1 ppt ≈ 1.5 mS/cm.

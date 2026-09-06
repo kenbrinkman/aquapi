@@ -1,4 +1,36 @@
 ---
+# =============================================================================
+# 🚫 DO NOT FLASH THIS FILE. INDEX-BASED — AND IT IS THE PRE-2026-09-02 VERSION.
+# =============================================================================
+# Two separate reasons, either one disqualifying:
+#
+# 1. ⚠⚠ IT STILL CARRIES THE NINE-DAY BUG. Both sensors below have
+#    `filter_out: NAN` plus a range lambda that `return {}`s, and there is NO
+#    `timeout:` watchdog and NO per-probe `problem` binary sensor. BOTH of those
+#    filters DROP the reading: the component publishes nothing, the entity never
+#    goes unavailable, and HA serves the last good value forever. That is
+#    exactly what pinned Temperature 1 at 74.8625030517578 for nine days against
+#    a dead probe (§11.18). The three-layer fault stack that fixed it lives ONLY
+#    in temperature_dallas_address.yaml. This file was never back-ported.
+#
+# 2. `index:` numbers probes by ROM-scan position, so when one dies the survivor
+#    is promoted to index 0 and starts reporting as the other probe.
+#
+# ⚠ The header of temperature_dallas_address.yaml says to "keep _index.yaml
+#   around only for re-reading addresses after a rebuild." THAT ADVICE IS
+#   RETIRED (2026-09-06) — flashing this to read addresses trades a working
+#   fault stack for the exact failure it was built to catch, at the moment you
+#   are least able to notice it (new, unproven probes).
+#
+# 🔑 TO RE-READ ROM ADDRESSES, DO NOT SWAP TO THIS FILE. Set logger: "DEBUG" in
+#   common/reef_overrides.yaml (it is the LAST package, so it wins), flash, and
+#   read the [C][gpio.one_wire:087] "Found devices:" dump from the INSTALL log.
+#   Address-based addressing and the fault stack both stay live throughout.
+#
+# Kept only as the historical record of what the build looked like before
+# 2026-07-30. If it is ever needed for real, port the three-layer stack from
+# temperature_dallas_address.yaml FIRST.
+# =============================================================================
 substitutions:
   dallasPin: "16"
   update_temp: "60s"
