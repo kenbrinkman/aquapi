@@ -81,45 +81,53 @@ substitutions:
   stale_timeout: "300s"
 
   # --- Probe ROM addresses -----------------------------------------------
-  # 64-bit 1-wire ROM codes, captured from the boot log 2026-07-30 23:57
-  # after the REV D.2 junction box rebuild. Both enumerated on GPIO16 at
-  # 12-bit resolution.
+  # 64-bit 1-wire ROM codes. Enumerated on GPIO16 at 12-bit resolution.
   #
-  # VERIFIED 2026-07-30 by hand-warming the probe in the junction box's T1
-  # terminal: 'Temperature 2' rose to 33.94°C while 'Temperature' held at
-  # 25.56°C. So the T1 terminal is 0xbf...4328.
+  # ✅ CAPTURED 2026-09-06 15:09 — the two NEW DigiKey DS18B20s fitted after the
+  #    intermittent DAT/GND short. Both appeared in one boot dump:
+  #      [C][gpio.one_wire:090]:     0x40000010ab151428 (DS18B20)
+  #      [C][gpio.one_wire:090]:     0x8b000010ab7bbb28 (DS18B20)
+  #    Captured with logger: "DEBUG" set in common/reef_overrides.yaml (the LAST
+  #    package, so it wins) — NOT by swapping to temperature_dallas_index.yaml,
+  #    which still carries the pre-2026-09-02 NAN-dropping filters. See the
+  #    warning header on that file; the old "keep _index.yaml for re-reading
+  #    addresses" advice is retired.
   #
-  # DO NOT infer the mapping from the order of the [C][dallas.temp.sensor:033]
-  # dump lines — those print in ROM-sorted bus order, NOT YAML declaration
-  # order, so reading them top-to-bottom as temp_1/temp_2 gives you the probes
-  # swapped. Only the hand-warm test is authoritative. (Consistent with the
-  # 1-wire search order: 0xbf..4328 sorts before 0x8a..4428 LSB-first, so the
-  # T1 terminal was index 0 under the old index-based config too.)
-  # ⚠⚠ STALE AS OF 2026-09-02 — THESE ARE THE ADDRESSES OF THE TWO DEAD
-  #    AMAZON/CLONE PROBES. The REV E.1 junction box rebuild fits two BRAND NEW
-  #    Olimex SNS-TMP-DS18B20-MAXIM probes, which have DIFFERENT ROM ADDRESSES.
-  #    Until they are captured and pasted here, both sensors will match nothing
-  #    on the bus and sit at NAN — which now shows up as "unknown" in HA plus
-  #    both "Temp Probe Fault" binary sensors ON. That is CORRECT behaviour and
-  #    is NOT a wiring fault. Follow the capture procedure above.
+  # ⚠⚠ THE T1/T2 ASSIGNMENT BELOW IS ARBITRARY AND UNVERIFIED. Both addresses
+  #    came from a single dump, which prints in ROM-SORTED bus order, NOT YAML
+  #    declaration order. Nothing here identifies which physical probe is in
+  #    which WAGO terminal.
   #
-  #    Unambiguous capture (better than the hand-warm test): boot with ONLY the
-  #    T1 probe's DAT lever closed. The bus dump then lists exactly ONE address
-  #    — that is addr_temp_1, with zero inference. Close T2's lever, reboot,
-  #    and the newly appeared address is addr_temp_2.
-  # ✅ T1 CAPTURED 2026-09-02 20:48 — new Olimex probe. Method: booted with only
-  #    T1's DAT lever closed, so the bus scan listed exactly ONE device:
-  #      [C][gpio.one_wire:090]:     0xb100000025f23928 (DS18B20)
-  #    No inference from dump line order, no hand-warm test needed.
-  addr_temp_1: "0xb100000025f23928"  # T1 terminal — NEW Olimex, verified alone on bus
-  # ✅ T2 CAPTURED 2026-09-02 20:57 — new Olimex probe. With T2's lever closed the
-  #    bus listed TWO devices; T1 was already known, so T2 is the other one:
-  #      0x6e00000025e47428 (DS18B20)   <- T2, new
-  #      0xb100000025f23928 (DS18B20)   <- T1, captured alone at 20:48
-  #    ⚠ Note they print in ROM-SORTED order (0x6e before 0xb1), NOT YAML order —
-  #    reading the dump top-to-bottom as temp_1/temp_2 would have SWAPPED them.
-  #    Identification here came from the one-probe-at-a-time capture, not the order.
-  addr_temp_2: "0x6e00000025e47428"  # T2 terminal — NEW Olimex, by elimination
+  # 🔑 THAT IS DELIBERATE, AND IT IS SAFE *ONLY* BECAUSE OF THREE FACTS THAT ARE
+  #    TRUE TODAY (2026-09-06) AND MUST BE RE-CHECKED BEFORE RELYING ON IT AGAIN:
+  #      1. cal_0 / cal_100 are 0.0 / 100.0 on BOTH probes — no per-probe bias is
+  #         baked in, so a swap applies no wrong correction to anything.
+  #      2. Both probes sit in the SAME sump water, so there is no second body
+  #         whose reading a swap could misattribute.
+  #      3. The new probes carry no physical labels yet.
+  #    Under those conditions the mapping is a LABELLING exercise, not a config
+  #    correction: whichever probe moves 'Temperature' IS T1, by definition.
+  #    ⚠ The moment ANY of the three stops being true — a calibration offset is
+  #      entered, a probe moves to the display tank, or a probe gets a tag — the
+  #      one-probe-at-a-time capture below becomes mandatory again.
+  #
+  # 🔻 OWED: cup test. Lift ONE probe into warm water and watch which entity
+  #    moves. Whichever it is, put a physical tag on that probe naming it, then
+  #    replace this block with the verified mapping. Until that is done, treat
+  #    T1/T2 as interchangeable names for "one of the two sump probes".
+  #
+  # For a future rebuild where the mapping DOES matter, the unambiguous method:
+  #    boot with ONLY the T1 probe's DAT lever closed. The bus dump then lists
+  #    exactly ONE address — that is addr_temp_1, with zero inference. Close
+  #    T2's lever, reboot, and the newly appeared address is addr_temp_2.
+  #
+  # HISTORICAL — superseded, kept so an old log line can still be identified:
+  #    0xbf00000021744328 / 0x8a00000023e44428  dead Amazon/clone probes (7/30)
+  #    0xb100000025f23928 / 0x6e00000025e47428  Olimex probes, removed 9/06 after
+  #                                             the intermittent short (torched
+  #                                             heat-shrink, see project docs)
+  addr_temp_1: "0x40000010ab151428"  # ⚠ UNVERIFIED which terminal — see above
+  addr_temp_2: "0x8b000010ab7bbb28"  # ⚠ UNVERIFIED which terminal — see above
 
   # Calibration variables
   # 0C using Ice Water; 100C using Boiling Water
