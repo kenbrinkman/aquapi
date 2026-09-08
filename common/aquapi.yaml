@@ -6,7 +6,8 @@ substitutions:
   # editing that file has no effect. Bump here.
   # 26.6.7 = EZO Plock buttons + trimmed I2C presence detection (2026-07-26)
   # 26.6.10 = new DigiKey DS18B20 ROM addresses; logger back to INFO (2026-09-06)
-  app_version: "26.6.10"
+  # 26.6.11 = logger DEBUG to capture the 3rd (basement ambient) DS18B20 address (2026-09-08)
+  app_version: "26.6.11"
   # github URL
   github_url: "https://github.com/TheRealFalseReality/aquapi"
 
