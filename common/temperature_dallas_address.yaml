@@ -131,7 +131,9 @@ substitutions:
 
   # ✅ CAPTURED 2026-09-08 23:54 — junction box REV F, third probe on the bus.
   #    Boot dump (logger DEBUG, build 26.6.11) listed T1, T2 and exactly ONE new
-  #    address, so this needs no inference. Hand-warm confirmation still owed.
+  #    address, so this needs no inference. ✅ CONFIRMED 2026-09-08 00:00 — hot tap
+  #    then cold on the AMB tip moved only 'Basement Ambient Temperature'; T1 in
+  #    hand moved only 'Temperature'. All three mappings physically proven.
   # ⚠ AMB is BASEMENT AIR, not a sump probe. It must never be referenced from
   #   temp_delta, temp_probes_disagree, or any HA vote/verdict helper
   #   (reef_sump_probes_ok, reef_temp_verdict, the *_movement_1h helpers).
