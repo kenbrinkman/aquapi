@@ -264,6 +264,42 @@ sensor:
       sorting_group_id: sorting_group_ec
       sorting_weight: 11
 
+  # Specific Gravity - the EZO's own SG field (v[3]), exactly as the circuit
+  # reports it, 3 decimals. Kenny's call 2026-09-08: the Command gauge reads
+  # THIS one. It stair-steps by 0.001 (~1.3 ppt) - that is the circuit's
+  # resolution, not a fault. The EOS-80 sensor above keeps the smooth
+  # 4-decimal history for Trends and InfluxDB.
+  - platform: template
+    name: Specific Gravity EZO
+    id: sensor_specific_gravity_ezo
+    icon: mdi:cup-water
+    unit_of_measurement: ""
+    accuracy_decimals: 3
+    update_interval: "${update_ec}"
+    state_class: "measurement"
+    lambda: |-
+      std::string str = id(raw_value_ec).state;
+      if (str.empty()) return NAN;
+      std::vector<std::string> v;
+      char * token;
+      char seps[] = ",";
+      token = strtok (&str[0],seps);
+      while (token != NULL) {
+        v.push_back(token);
+        token = strtok (NULL, seps);
+      }
+      if (v.size() == 4) {
+        float sg = std::stof(v[3]);
+        if (isnan(sg) || sg < 0.9f || sg > 1.1f) return NAN;
+        return sg;
+      }
+      else {
+        return NAN;
+      }
+    web_server:
+      sorting_group_id: sorting_group_ec
+      sorting_weight: 12
+
 text_sensor:
   # Conductivity Raw Value
   - platform: template
@@ -278,6 +314,7 @@ text_sensor:
         # - component.update: sensor_conductivity
         - component.update: sensor_tds
         - component.update: sensor_specific_gravity
+        - component.update: sensor_specific_gravity_ezo
     web_server:
       sorting_group_id: sorting_group_ec
 
