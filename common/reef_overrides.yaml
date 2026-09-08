@@ -32,7 +32,7 @@ substitutions:
   # lists the DS18B20 ROM addresses. Set this to "DEBUG" when you need to read
   # those addresses (see common/temperature_dallas_address.yaml), then put it
   # back.
-  logger: "DEBUG"   # 26.6.11 TEMP — capturing the AMB (3rd) DS18B20 address. Revert to INFO.
+  logger: "INFO"
 
   # --- EC scoring rescaled for seawater, in mS/cm (overrides water_quality.yaml
   # freshwater defaults). Reef ≈ 53 mS/cm @ 35 ppt; 1 ppt ≈ 1.5 mS/cm.

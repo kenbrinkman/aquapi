@@ -129,6 +129,16 @@ substitutions:
   addr_temp_1: "0x40000010ab151428"  # T1 terminal — DigiKey, hand-warm verified 9/06
   addr_temp_2: "0x8b000010ab7bbb28"  # T2 terminal — DigiKey, hand-warm verified 9/06
 
+  # ✅ CAPTURED 2026-09-08 23:54 — junction box REV F, third probe on the bus.
+  #    Boot dump (logger DEBUG, build 26.6.11) listed T1, T2 and exactly ONE new
+  #    address, so this needs no inference. Hand-warm confirmation still owed.
+  # ⚠ AMB is BASEMENT AIR, not a sump probe. It must never be referenced from
+  #   temp_delta, temp_probes_disagree, or any HA vote/verdict helper
+  #   (reef_sump_probes_ok, reef_temp_verdict, the *_movement_1h helpers).
+  #   A basement-air voter sits 5–10 °F off the sump and fails the band forever.
+  addr_temp_amb: "0x9b000010ab5d7e28"  # AMB terminal — DigiKey, basement ambient
+  stale_timeout_amb: "300s"
+
   # Calibration variables
   # 0C using Ice Water; 100C using Boiling Water
   # (calibration happens in °C, before the °F conversion filter)
@@ -298,6 +308,36 @@ sensor:
       sorting_group_id: sorting_group_temperature
       sorting_weight: 69
 
+  # --- Basement ambient — a SENSOR, not a voter ------------------------------
+  # Third DS18B20 on the same bus (R3 is still the only pull-up). Reports the air
+  # around the sump so HA can later derive sump − ambient for the cooling
+  # decision. Never reference this id from temp_delta / temp_probes_disagree or
+  # from any HA sump-vote helper. Range is AIR (-5..50 °C), not tank, and the
+  # staleness watchdog ships in the same change, per the header rule.
+  - platform: dallas_temp
+    address: ${addr_temp_amb}
+    id: temp_amb
+    icon: mdi:thermometer
+    name: "Basement Ambient Temperature"
+    state_class: "measurement"
+    device_class: "temperature"
+    unit_of_measurement: "°F"
+    update_interval: "${update_temp}"
+    resolution: 12
+    accuracy_decimals: 2
+    filters:
+      # ⚠ NO filter_out: NAN — publish NAN so HA shows unknown (see header).
+      # 85.0 = DS18B20 power-on default, -127 / 0.0 = bus glitch.
+      - lambda: |-
+          if (isnan(x) || x < -5.0 || x > 50.0) return NAN;
+          return x;
+      - lambda: return x * 9.0 / 5.0 + 32.0;
+      # Watchdog — MUST BE LAST.
+      - timeout: ${stale_timeout_amb}
+    web_server:
+      sorting_group_id: sorting_group_temperature
+      sorting_weight: 80
+
   # --- Probe agreement --------------------------------------------------------
   # T1 and T2 sit in the SAME 75 gal sump, so in steady state they must track
   # each other. This is the ONLY check that can catch a probe frozen on a
@@ -389,6 +429,20 @@ binary_sensor:
     web_server:
       sorting_group_id: sorting_group_temperature
       sorting_weight: 63
+
+  # Ambient probe fault — same isnan() mirror as the sump probes. Diagnostic;
+  # it is NOT part of the sump pair and must not feed reef_temp_fault.
+  - platform: template
+    name: "Ambient Temp Probe Fault"
+    id: temp_amb_fault
+    icon: mdi:thermometer-alert
+    device_class: problem
+    entity_category: diagnostic
+    lambda: |-
+      return isnan(id(temp_amb).state);
+    web_server:
+      sorting_group_id: sorting_group_temperature
+      sorting_weight: 81
 
   # Trips when the two probes drift apart by more than the configurable
   # threshold. delayed_on debounces it: a single odd sample, or the transient
