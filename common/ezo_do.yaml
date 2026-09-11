@@ -22,6 +22,14 @@ globals:
     type: bool
     restore_value: true
     initial_value: 'false'
+  # Diagnostic routing (Master Reference 11.102). When true, EZO payloads go to
+  # 'DO - Command Result' ONLY and are kept OUT of raw_value_do, so Export strings
+  # and deliberately uncompensated verification reads never enter the live DO
+  # series. NOT restored across a reboot - normal reads must resume on their own.
+  - id: do_diag_mode
+    type: bool
+    restore_value: false
+    initial_value: 'false'
 
 api:
   actions:
@@ -106,7 +114,15 @@ sensor:
         - lambda: |-
             // Ignore empty payloads (e.g. *OK from set-type commands like T,n / S,n)
             // so derived sensors aren't blanked by a parse failure.
-            if (!x.empty()) id(raw_value_do).publish_state(x);
+            if (x.empty()) return;
+            // Diagnostic mode: Export strings and defaults-verification reads are NOT
+            // tank data. Route them to the command result and leave the live series
+            // untouched. See Master Reference 11.102.
+            if (id(do_diag_mode)) {
+              id(result_do).publish_state(x);
+              return;
+            }
+            id(raw_value_do).publish_state(x);
     on_calibration:
       then:
         - lambda:
@@ -301,6 +317,65 @@ button:
             else if (id(select_command_do).current_option() == "Set Salinity Compensation @ 35ppt") {
               id(do_ezo).send_custom("S,35.0,ppt");
             }
+            else if (id(select_command_do).current_option() == "Verify Cal @ Atlas Defaults (T,20 / S,0)") {
+              // EZO-DO datasheet V5.8 p.63 "Calibrate first, compensate later", and
+              // p.65: a good air Cal reads 9.09-9.1X mg/L ONLY at default compensation.
+              // Pressure is deliberately NOT sent - this firmware never writes P,n, so
+              // the circuit already sits at its own default. Do not invent a value here.
+              id(do_diag_mode) = true;
+              id(do_ezo).send_custom("T,20.0");
+              id(do_ezo).send_custom("S,0");
+              id(do_ezo).send_custom("R");
+              ESP_LOGW("ezo_do", "DO defaults read-back armed. EXPECT 9.09-9.1X mg/L if the air Cal is good. Result goes to 'DO - Command Result'; live DO sensors are NOT updated. Run 'Restore Live Compensation' when done.");
+            }
+            else if (id(select_command_do).current_option() == "Restore Live Compensation") {
+              id(do_diag_mode) = false;
+              float tF = id(temp_1).state;
+              if (!isnan(tF) && tF > 32.0f && tF < 110.0f) {
+                float tC = (tF - 32.0f) * 5.0f / 9.0f;
+                char cmd[16];
+                snprintf(cmd, sizeof(cmd), "T,%.2f", tC);
+                id(do_ezo).send_custom(cmd);
+              }
+              float S = id(sensor_salinity).state;
+              if (!isnan(S) && S >= 0.0f && S <= 45.0f) {
+                char cmd[20];
+                snprintf(cmd, sizeof(cmd), "S,%.1f,ppt", S);
+                id(do_ezo).send_custom(cmd);
+              }
+              ESP_LOGI("ezo_do", "DO live compensation restored, diagnostic mode OFF. Normal reads resume.");
+            }
+            else if (id(select_command_do).current_option() == "Export Calibration - Info") {
+              // EZO-DO datasheet V5.8 p.48: Export,? returns "<strings>,<bytes>",
+              // normally 10,120. Then press 'Export Calibration - Next Line' that many
+              // times; the final response is *DONE.
+              id(do_diag_mode) = true;
+              id(do_ezo).send_custom("Export,?");
+              ESP_LOGW("ezo_do", "DO Export info sent (expect 10,120). Diagnostic mode ON. Record EVERY line from 'DO - Command Result' IN ORDER - a partial set is worthless.");
+            }
+            else if (id(select_command_do).current_option() == "Export Calibration - Next Line") {
+              id(do_diag_mode) = true;
+              id(do_ezo).send_custom("Export");
+              ESP_LOGW("ezo_do", "DO Export line sent. Read 'DO - Command Result' BEFORE pressing again - each press overwrites the last. Stop at *DONE.");
+            }
+            else if (id(select_command_do).current_option() == "Import Calibration - Send Line") {
+              // EZO-DO datasheet V5.8 p.49: send the exported strings back in order.
+              // The circuit REBOOTS after the final line. A mistyped line is rejected
+              // and the device reboots having imported nothing - start the set over.
+              std::string s = id(do_import_string).state;
+              if (s.empty()) {
+                ESP_LOGE("ezo_do", "DO Import aborted: 'DO - Import String' is empty. Put one exported line in it first.");
+              } else {
+                id(do_diag_mode) = true;
+                std::string cmd = "Import," + s;
+                id(do_ezo).send_custom(cmd.c_str());
+                ESP_LOGW("ezo_do", "DO Import line sent. The circuit reboots after the LAST line of the set.");
+              }
+            }
+            else if (id(select_command_do).current_option() == "Diagnostic Mode OFF") {
+              id(do_diag_mode) = false;
+              ESP_LOGI("ezo_do", "DO diagnostic mode OFF. Payloads resume publishing to the live DO sensors.");
+            }
             else if (id(select_command_do).current_option() == "Factory Reset") {
               id(do_ezo).send_custom("Factory");
               id(do_cal_dry_done) = false;
@@ -348,11 +423,36 @@ select:
       - "Salinity Compensation Value"
       - "Get Salinity Compensation"
       - "Set Salinity Compensation @ 35ppt"
+      # Added 09/11/26 - Master Reference 11.102. Verification and calibration
+      # backup, both straight from EZO-DO datasheet V5.8 (p.48, p.49, p.63, p.65).
+      - "Verify Cal @ Atlas Defaults (T,20 / S,0)"
+      - "Restore Live Compensation"
+      - "Export Calibration - Info"
+      - "Export Calibration - Next Line"
+      - "Import Calibration - Send Line"
+      - "Diagnostic Mode OFF"
       - "Factory Reset"
     initial_option: "Check Calibration"
     set_action:
       - logger.log:
           format: "Chosen option: %s"
           args: ["x.c_str()"]
+    web_server:
+      sorting_group_id: sorting_group_do
+
+text:
+  # Paste ONE exported calibration line here, then run
+  # "Import Calibration - Send Line" from 'DO - Command Select'.
+  # EZO-DO datasheet V5.8 p.48: export strings are up to 12 characters each,
+  # 10 strings / 120 bytes for a full set. Order matters; send them 1 through 10.
+  - platform: template
+    name: "DO - Import String"
+    id: do_import_string
+    optimistic: true
+    mode: text
+    min_length: 0
+    max_length: 32
+    entity_category: "Config"
+    icon: mdi:content-paste
     web_server:
       sorting_group_id: sorting_group_do
