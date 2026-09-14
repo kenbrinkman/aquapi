@@ -39,3 +39,14 @@ substitutions:
   wq_ec_score_deviation_multiplier: "10.0"  # ≈ −15 pts per ppt off mid-band
   wq_ec_good_offset: "2"    # Caution when > 2 mS/cm (~1.3 ppt) outside band
   wq_ec_alert_offset: "5"   # Alert when > 5 mS/cm (~3.3 ppt) outside band
+
+# 26.6.14 (MR 11.139 A, item 8e). No explicit api: block existed; ESPHome's default
+# is 15min. A node HA cannot reach soft-reboots itself when no client has connected
+# for this long - EZO power untouched, every stored calibration survives, and the
+# W5500 reset is re-pulsed. On 09/12/26 the Ethernet link died with the ESP32
+# provably running and the plug was pulled a minute before the 15-min self-reboot
+# would have fired; the power cycle is what hung EC and railed DO (MR 11.124).
+# Ordinary API blips are < 10 s (~6.5/day, MR 11.68.2) and never reach this.
+# ⚠ An HA restart longer than 5 min will also soft-reboot the node - harmless.
+api:
+  reboot_timeout: 5min

@@ -17,6 +17,21 @@ globals:
     type: bool
     restore_value: true
     initial_value: 'false'
+  # 26.6.14 (MR 11.139 G): diagnostic mode. While set, the component's poller is
+  # STOPPED (stop_poller) and the compensation interval sends nothing, so an
+  # Export/Import sequence is never interrupted by a T/S/R (any intervening
+  # command restarts an export from line 1 - MR 11.138.3) and no diagnostic
+  # reply can enter the live series (MR 11.138.2). NOT restored across a reboot.
+  - id: orp_diag_mode
+    type: bool
+    restore_value: false
+    initial_value: 'false'
+  # Minutes spent in diagnostic mode; the watchdog interval auto-exits at 15 so
+  # a forgotten 'Diagnostic Mode OFF' cannot leave the channel dark for hours.
+  - id: orp_diag_ticks
+    type: int
+    restore_value: false
+    initial_value: '0'
 
 api:
   actions:
@@ -55,8 +70,16 @@ api:
 
 esphome:
   on_boot:
-    - priority: 800
+    # 26.6.14 (MR 11.139 B, item 8f): was priority 800, i.e. within a few hundred
+    # ms of the ESP32 starting. After a POWER cycle the EZO circuits boot alongside
+    # it and do EEPROM housekeeping to ~900 ms (EC changelog V1.96) / 1,000 ms
+    # (datasheet mode-change reboot); a command inside that window hangs the
+    # circuit mid-command (green LED, ACKs, publishes nothing - MR 11.124.4).
+    # -100 runs after every component is up; the 2 s delay clears the window.
+    # Deliberate divergence from upstream (which keeps 800).
+    - priority: -100
       then:
+        - delay: 2s
         - button.press: send_selected_orp
     - priority: 200
       then:
@@ -64,6 +87,22 @@ esphome:
             if (!id(orp_cal_done)) {
               ESP_LOGW("ezo_orp", "ORP sensor may not be calibrated! Run calibration via 'ORP - Command Select'.");
             }
+
+interval:
+  # 26.6.14 (MR 11.139 G): diagnostic-mode watchdog. Auto-exit after 15 min.
+  - interval: 60s
+    then:
+      - lambda: |-
+          if (!id(orp_diag_mode)) { id(orp_diag_ticks) = 0; return; }
+          id(orp_diag_ticks) += 1;
+          if (id(orp_diag_ticks) >= 15) {
+            id(orp_diag_mode) = false;
+            id(orp_diag_ticks) = 0;
+            id(orp_ezo).start_poller();
+            ESP_LOGW("ezo_orp", "ORP diagnostic mode auto-exited after 15 min (watchdog). Live reads resume; compensation re-pushes on the next cycle.");
+          } else {
+            ESP_LOGW("ezo_orp", "ORP diagnostic mode ON for %d min - live reads PAUSED. Run 'Diagnostic Mode OFF' (auto-exit at 15).", id(orp_diag_ticks));
+          }
 
 sensor:
   # EZO Circuits (SCL/RX, SDA/TX)
@@ -134,7 +173,14 @@ button:
     on_press:
       then:
         - lambda: |-
-            esphome::i2c::ErrorCode err = id(bus_a)->write(${addORP}, nullptr, 0);
+            esphome::i2c::ErrorCode err = esphome::i2c::ERROR_OK;
+              // 26.6.14 (MR 11.139 C): the zero-length I2C ACK probe that stood here went
+              // straight to the circuit OUTSIDE the ezo component's command queue every
+              // 60 s - a start/stop at the circuit's address while it may be mid-read.
+              // Candidate cause of the 09/13 pH read-path stall (MR 11.134.2). The ezo
+              // component logs its own read errors; the boot-time i2c scan feeds
+              // ezo_*_detected. Structure kept so the diff stays small.
+
             if (err == esphome::i2c::ERROR_OK) {
               id(orp_ezo).send_custom("R");
             }
@@ -181,6 +227,44 @@ button:
               id(orp_cal_done) = false;
               ESP_LOGI("ezo_orp", "ORP calibration CLEARED. All calibration points reset.");
             }
+            // ---- 26.6.14 (MR 11.139 G): calibration backup / restore, EZO datasheets ----
+            else if (id(select_command_orp).current_option() == "Export Calibration - Info") {
+              // Export,? answers "?EXPORT,<lines>,<bytes>". The count is circuit- and
+              // firmware-specific (DO V2.17 answered 7,78 on 09/13/26) - READ IT, never
+              // assume. Then press 'Export Calibration - Next Line' that many times and
+              // record every line IN ORDER; the last press answers *DONE. Any other
+              // command in between restarts the export, which is why the poller and the
+              // compensation interval are paused while diagnostic mode is on.
+              id(orp_diag_mode) = true; id(orp_diag_ticks) = 0;
+              id(orp_ezo).stop_poller();
+              id(orp_ezo).send_custom("Export,?");
+              ESP_LOGW("ezo_orp", "ORP Export info sent. Diagnostic mode ON (live reads paused). Read the header count from 'ORP - Command Result'.");
+            }
+            else if (id(select_command_orp).current_option() == "Export Calibration - Next Line") {
+              id(orp_diag_mode) = true;
+              id(orp_ezo).stop_poller();
+              id(orp_ezo).send_custom("Export");
+              ESP_LOGW("ezo_orp", "ORP Export line sent. Read 'ORP - Command Result' BEFORE pressing again - each press overwrites the last. Stop at *DONE.");
+            }
+            else if (id(select_command_orp).current_option() == "Import Calibration - Send Line") {
+              // Send the exported strings back in order; the circuit REBOOTS after the
+              // final line. A mistyped line is rejected and nothing is imported.
+              std::string s = id(orp_import_string).state;
+              if (s.empty()) {
+                ESP_LOGE("ezo_orp", "ORP Import aborted: 'ORP - Import String' is empty. Put one exported line in it first.");
+              } else {
+                id(orp_diag_mode) = true; id(orp_diag_ticks) = 0;
+                id(orp_ezo).stop_poller();
+                std::string cmd = "Import," + s;
+                id(orp_ezo).send_custom(cmd.c_str());
+                ESP_LOGW("ezo_orp", "ORP Import line sent. The circuit reboots after the LAST line of the set.");
+              }
+            }
+            else if (id(select_command_orp).current_option() == "Diagnostic Mode OFF") {
+              id(orp_diag_mode) = false; id(orp_diag_ticks) = 0;
+              id(orp_ezo).start_poller();
+              ESP_LOGI("ezo_orp", "ORP diagnostic mode OFF. Live reads resume.");
+            }
             else if (id(select_command_orp).current_option() == "Factory Reset") {
               id(orp_ezo).send_custom("Factory");
               id(orp_cal_done) = false;
@@ -217,11 +301,32 @@ select:
       - "Check Calibration"
       - "Calibrate @ 225 mV (WILL RESET CALIBRATION)"
       - "Calibrate CLEAR (WILL RESET CALIBRATION)"
+      # 26.6.14 (MR 11.139 G): calibration backup/restore. Poller paused while on.
+      - "Export Calibration - Info"
+      - "Export Calibration - Next Line"
+      - "Import Calibration - Send Line"
+      - "Diagnostic Mode OFF"
       - "Factory Reset"
     initial_option: "Check Calibration"
     set_action:
       - logger.log:
           format: "Chosen option: %s"
           args: ["x.c_str()"]
+    web_server:
+      sorting_group_id: sorting_group_orp
+
+text:
+  # Paste ONE exported calibration line here, then run
+  # "Import Calibration - Send Line" from 'ORP - Command Select'. Order matters;
+  # send the lines in the order they were exported. Never Import during a calibration.
+  - platform: template
+    name: "ORP - Import String"
+    id: orp_import_string
+    optimistic: true
+    mode: text
+    min_length: 0
+    max_length: 32
+    entity_category: "Config"
+    icon: mdi:content-paste
     web_server:
       sorting_group_id: sorting_group_orp
