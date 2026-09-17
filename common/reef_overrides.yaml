@@ -40,6 +40,16 @@ substitutions:
   wq_ec_good_offset: "2"    # Caution when > 2 mS/cm (~1.3 ppt) outside band
   wq_ec_alert_offset: "5"   # Alert when > 5 mS/cm (~3.3 ppt) outside band
 
+  # --- DO scored in % SATURATION (26.6.15, item 0dj). Upstream water_quality.yaml
+  # scores do_ezo (mg/L) against do_ideal_low/high, whose defaults and units are
+  # %sat (85-115), with offsets 1.0 / 2.5: every real DO (~6-7 mg/L) scored
+  # Alert and pinned the Water Quality band there. Score the %sat sensor instead
+  # (binary DO In Range already does) and rescale the offsets to %sat points.
+  wq_do_sensor_id: sensor_do_percent
+  wq_do_score_deviation_multiplier: "1.5"  # 100 % -> 100 pts, 85 % -> 77.5, 70 % -> 55
+  wq_do_good_offset: "5"    # Caution when > 5 %sat outside band (< 80 %, > 120 %)
+  wq_do_alert_offset: "15"  # Alert when > 15 %sat outside band (< 70 %, > 130 %)
+
 # 26.6.14 (MR 11.139 A, item 8e). No explicit api: block existed; ESPHome's default
 # is 15min. A node HA cannot reach soft-reboots itself when no client has connected
 # for this long - EZO power untouched, every stored calibration survives, and the
