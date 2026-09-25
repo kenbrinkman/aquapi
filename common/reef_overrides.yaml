@@ -60,3 +60,19 @@ substitutions:
 # ⚠ An HA restart longer than 5 min will also soft-reboot the node - harmless.
 api:
   reboot_timeout: 5min
+
+# 26.6.16 (#83). Why did it reboot? The ESP32 records the cause of its last reset
+# (power-on, brownout, panic, task/interrupt watchdog, software restart). Only this
+# one sensor from common/debug.yaml: the rest of that package is log/heap noise.
+# The 09/24 OTA crash was a LoadProhibited panic in the W5500 SPI path, and the
+# plug-OFF-edge link deaths self-reboot via api reboot_timeout (software reset);
+# this tells a brownout (#22's territory) from either.
+debug:
+  update_interval: 60min
+
+text_sensor:
+  - platform: debug
+    reset_reason:
+      name: "Reset Reason"
+      icon: mdi:restart-alert
+      entity_category: "diagnostic"

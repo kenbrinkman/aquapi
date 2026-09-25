@@ -9,7 +9,8 @@ substitutions:
   # 26.6.11 = logger DEBUG to capture the 3rd (basement ambient) DS18B20 address (2026-09-08)
   # 26.6.12 = third DS18B20 (basement ambient, temp_amb) added; NOT a sump voter; logger back to INFO (2026-09-08)
   # 26.6.15 = Water Quality scores DO in %sat, offsets rescaled (item 0dj, 2026-09-16)
-  app_version: "26.6.15"
+  # 26.6.16 = Reset Reason text sensor (debug component, reset_reason only) (#83, 2026-09-24)
+  app_version: "26.6.16"
   # github URL
   github_url: "https://github.com/TheRealFalseReality/aquapi"
 
