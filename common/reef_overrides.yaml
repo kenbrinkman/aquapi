@@ -57,9 +57,14 @@ substitutions:
 # provably running and the plug was pulled a minute before the 15-min self-reboot
 # would have fired; the power cycle is what hung EC and railed DO (MR 11.124).
 # Ordinary API blips are < 10 s (~6.5/day, MR 11.68.2) and never reach this.
-# ⚠ An HA restart longer than 5 min will also soft-reboot the node - harmless.
+# 26.6.17 (Kenny 2026-09-26): 5min -> 2min. Plug-OFF-edge link deaths (#74) self-heal
+# by this reboot; HA marks the node unavailable 3:01 after last contact, so at 2min the
+# node is back before HA notices and the tank is dark ~2 min, not ~5.5. HA's offline
+# alert waits 5 min, so it fires only when repeated self-reboots have failed.
+# ⚠ An HA restart longer than 2 min will also soft-reboot the node - harmless
+# (soft reboots leave EZO power on).
 api:
-  reboot_timeout: 5min
+  reboot_timeout: 2min
 
 # 26.6.16 (#83). Why did it reboot? The ESP32 records the cause of its last reset
 # (power-on, brownout, panic, task/interrupt watchdog, software restart). Only this
