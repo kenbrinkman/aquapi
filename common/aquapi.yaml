@@ -5,13 +5,18 @@ substitutions:
   # removed upstream in "App version rework (#147)" and is included by nothing —
   # editing that file has no effect. Bump here.
   # 26.6.7 = EZO Plock buttons + trimmed I2C presence detection (2026-07-26)
+  # 26.6.8 = DS18B20 fail loudly on probe death; new Olimex probe addresses (2026-09-02)
+  # 26.6.9 = logger DEBUG to re-capture DS18B20 ROM addresses (2026-09-06)
   # 26.6.10 = new DigiKey DS18B20 ROM addresses; logger back to INFO (2026-09-06)
   # 26.6.11 = logger DEBUG to capture the 3rd (basement ambient) DS18B20 address (2026-09-08)
   # 26.6.12 = third DS18B20 (basement ambient, temp_amb) added; NOT a sump voter; logger back to INFO (2026-09-08)
+  # 26.6.13 = expose the EZO's own specific-gravity field, 3 decimals (2026-09-08)
+  # 26.6.14 = boot-time EZO traffic delayed, api reboot_timeout 5min, EC reply routing, diag mode pauses the poller, pH 3 dp (2026-09-13)
   # 26.6.15 = Water Quality scores DO in %sat, offsets rescaled (item 0dj, 2026-09-16)
   # 26.6.16 = Reset Reason text sensor (debug component, reset_reason only) (#83, 2026-09-24)
   # 26.6.17 = api reboot_timeout 5min -> 2min (#74 link deaths self-heal before HA notices, 2026-09-26)
-  app_version: "26.6.17"
+  # 26.6.18 = comments and the EC I2C log text only, no logic change (backlog #48, 2026-10-17)
+  app_version: "26.6.18"
   # github URL
   github_url: "https://github.com/TheRealFalseReality/aquapi"
 

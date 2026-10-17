@@ -47,10 +47,10 @@ script:
           id(ezo_orp_detected).publish_state(check_i2c_device(${addORP}));
           id(ezo_do_detected).publish_state(check_i2c_device(${addDO}));
 
-          // A circuit that has flipped to UART mode disappears from the bus,
-          // so this doubles as a Plock/protocol-latch canary.
+          // A missing ACK means the circuit is off the bus or unpowered. It is NOT a UART-mode
+          // canary: an EC circuit has shown the green (UART) LED while still ACKing 0x64. Look at the LED.
           if (!id(ezo_ph_detected).state)  ESP_LOGW("ezo_detection", "pH (0x63) not responding on I2C.");
-          if (!id(ezo_ec_detected).state)  ESP_LOGW("ezo_detection", "EC (0x64) not responding on I2C — check for green LED (UART mode).");
+          if (!id(ezo_ec_detected).state)  ESP_LOGW("ezo_detection", "EC (0x64) not responding on I2C.");
           if (!id(ezo_orp_detected).state) ESP_LOGW("ezo_detection", "ORP (0x62) not responding on I2C.");
           if (!id(ezo_do_detected).state)  ESP_LOGW("ezo_detection", "DO (0x61) not responding on I2C.");
 

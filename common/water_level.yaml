@@ -23,7 +23,7 @@ esphome:
       - component.update: water_level
 
 binary_sensor:
-  # Optical Sensor - LOW (yellow)
+  # Optical Sensor - LOW (GPIO33, blue harness leg)
   - platform: gpio
     id: os_low
     icon: mdi:arrow-down-bold
@@ -43,7 +43,7 @@ binary_sensor:
     web_server:
       sorting_group_id: sorting_group_water_level
 
-  # Optical Sensor - HIGH (blue)
+  # Optical Sensor - HIGH (GPIO32, yellow harness leg)
   - platform: gpio
     id: os_high
     icon: mdi:arrow-up-bold
