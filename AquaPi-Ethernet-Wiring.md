@@ -87,6 +87,9 @@ reading right after an install is not chased as a probe or firmware fault.
 **Status (2026-10-29):** delivered, **not yet installed**. Update this line with
 the install date and the media loaded.
 
+**Initial run mode:** pump on 24/7, flow set by hand with the included ½" QC
+ball valve (blue handle). No AquaPi or Home Assistant control yet.
+
 | Spec | Value |
 |------|-------|
 | Housing | single 10" canister, refillable 10" media cartridge |
@@ -107,3 +110,16 @@ What to expect on the AquaPi after it goes online:
 - **Neither** should move temperature, EC/salinity or DO noticeably. A change
   in those around the install points at something else (e.g. the probe was
   disturbed while plumbing in the sump).
+
+**Planned automation (not built yet):**
+
+1. **Pump monitoring and control.** Switch the reactor pump on and off, and
+   confirm it is actually running, not just powered. How depends on how it is
+   powered (smart plug in Home Assistant or a relay on the AquaPi). Decide
+   before install so the pump goes on the right outlet.
+2. **Media refills and timing.** Track when the media was loaded and how many
+   days it has been running, and remind when it is due for a change.
+3. **Phosphate-driven runs (after a Neptune Trident NP is added).** Use the
+   Trident NP's nitrate/phosphate results to decide when the GFO reactor runs,
+   instead of 24/7. This needs the Trident NP readings in Home Assistant first;
+   the Trident NP is not wired to the AquaPi.
