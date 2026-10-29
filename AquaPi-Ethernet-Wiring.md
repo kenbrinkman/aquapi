@@ -111,15 +111,15 @@ What to expect on the AquaPi after it goes online:
   in those around the install points at something else (e.g. the probe was
   disturbed while plumbing in the sump).
 
-**Planned automation (not built yet):**
+**Open — to do (as of 2026-10-29):**
 
-1. **Pump monitoring and control.** Switch the reactor pump on and off, and
-   confirm it is actually running, not just powered. How depends on how it is
-   powered (smart plug in Home Assistant or a relay on the AquaPi). Decide
-   before install so the pump goes on the right outlet.
-2. **Media refills and timing.** Track when the media was loaded and how many
-   days it has been running, and remind when it is due for a change.
-3. **Phosphate-driven runs (after a Neptune Trident NP is added).** Use the
-   Trident NP's nitrate/phosphate results to decide when the GFO reactor runs,
-   instead of 24/7. This needs the Trident NP readings in Home Assistant first;
-   the Trident NP is not wired to the AquaPi.
+- [ ] Install the reactor and record the install date and media loaded above.
+- [ ] Decide how the pump is powered (smart plug in Home Assistant, or a relay
+      on the AquaPi) before install, so it goes on the right outlet.
+- [ ] Pump monitoring and control: switch it on and off, and confirm it is
+      actually running, not just powered.
+- [ ] Media refills and timing: track when media was loaded and how long it
+      has run, and remind when a change is due.
+- [ ] After a Neptune Trident NP is added: get its nitrate/phosphate results
+      into Home Assistant (it is not wired to the AquaPi), then run the GFO
+      reactor on phosphate results instead of 24/7.
