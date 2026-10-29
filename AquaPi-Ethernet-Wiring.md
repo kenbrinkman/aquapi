@@ -76,3 +76,50 @@ Level card reads this sensor directly.
 | Dallas DS18B20 temp probes (×2) | GPIO16 |
 | I2C bus (EZO pH / EC / ORP / DO carriers) | SDA GPIO21 (yellow), SCL GPIO22 (blue) |
 | Binary Sensor 1 | GPIO13 (yellow) |
+
+## Non-electrical equipment that moves the readings
+
+Nothing here is wired to the AquaPi. Recorded so a step change in a probe
+reading right after an install is not chased as a probe or firmware fault.
+
+### BRS GFO & Carbon Reactor – Deluxe
+
+**Status (2026-10-29):** delivered, **not yet installed**. Update this line with
+the install date and the media loaded.
+
+**Initial run mode:** pump on 24/7, flow set by hand with the included ½" QC
+ball valve (blue handle). No AquaPi or Home Assistant control yet.
+
+| Spec | Value |
+|------|-------|
+| Housing | single 10" canister, refillable 10" media cartridge |
+| Capacity | 3 cups carbon (~300 g) **or** 2 cups GFO (~290 g) — one media per canister |
+| Plumbing | ½" push-connect, ½" tubing (6 ft supplied), ½" QC ball valve for flow |
+| Size | 13" H × 6" W × 5" D |
+| Pump | Sicce Syncra 1.5 (357 GPH max) on the "with pump" SKU; flow trimmed with the ball valve |
+| Extras | built-in pressure-release (air bleed) valve, canister wrench |
+
+What to expect on the AquaPi after it goes online:
+
+- **Carbon:** ORP commonly rises over the first days as carbon strips
+  organics/yellowing compounds. A climb after install is the media working, not
+  ORP probe drift — don't recalibrate ORP on the strength of it.
+- **GFO:** lowers phosphate (not measured here). Fresh GFO can also take a
+  little alkalinity at first, which can show as a small pH dip; ramp GFO
+  in gradually and test PO₄/alk by hand.
+- **Neither** should move temperature, EC/salinity or DO noticeably. A change
+  in those around the install points at something else (e.g. the probe was
+  disturbed while plumbing in the sump).
+
+**Open — to do (as of 2026-10-29):**
+
+- [ ] Install the reactor and record the install date and media loaded above.
+- [ ] Decide how the pump is powered (smart plug in Home Assistant, or a relay
+      on the AquaPi) before install, so it goes on the right outlet.
+- [ ] Pump monitoring and control: switch it on and off, and confirm it is
+      actually running, not just powered.
+- [ ] Media refills and timing: track when media was loaded and how long it
+      has run, and remind when a change is due.
+- [ ] After a Neptune Trident NP is added: get its nitrate/phosphate results
+      into Home Assistant (it is not wired to the AquaPi), then run the GFO
+      reactor on phosphate results instead of 24/7.
